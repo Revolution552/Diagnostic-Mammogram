@@ -13,19 +13,19 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/v1/patients")
+@RequestMapping("/api/patients")
 @RequiredArgsConstructor
 public class PatientController {
 
     private final PatientService patientService;
 
-    @GetMapping
+    @GetMapping("/get")
     public ResponseEntity<Page<PatientResponse>> getAllPatients(
             @PageableDefault(size = 10) Pageable pageable) {
         return ResponseEntity.ok(patientService.getAllPatients(pageable));
     }
 
-    @PostMapping
+    @PostMapping("/register")
     public ResponseEntity<PatientResponse> createPatient(
             @Valid @RequestBody PatientRequest request) {
         return new ResponseEntity<>(
@@ -33,19 +33,19 @@ public class PatientController {
                 HttpStatus.CREATED);
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/get/{id}")
     public ResponseEntity<PatientResponse> getPatientById(@PathVariable Long id) {
         return ResponseEntity.ok(patientService.getPatientById(id));
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/update/{id}")
     public ResponseEntity<PatientResponse> updatePatient(
             @PathVariable Long id,
             @Valid @RequestBody PatientRequest request) {
         return ResponseEntity.ok(patientService.updatePatient(id, request));
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/delete/{id}")
     public ResponseEntity<Void> deletePatient(@PathVariable Long id) {
         patientService.deletePatient(id);
         return ResponseEntity.noContent().build();

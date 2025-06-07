@@ -13,13 +13,17 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "users")
+@Table(name = "users",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = "username")
+        })
 public class User implements UserDetails {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false)
     private String username;
 
     @Column(nullable = false)
@@ -29,19 +33,23 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private Role role;
 
+    @Column(nullable = false)
+    private boolean enabled = true;
+
+    public enum Role {
+        ADMIN,
+        DOCTOR,
+        RADIOLOGIST;
+
+        public String getAuthority() {
+            return "ROLE_" + this.name();
+        }
+    }
+
+    // ========== UserDetails Implementation ==========
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
-    }
-
-    @Override
-    public String getPassword() {
-        return password;
-    }
-
-    @Override
-    public String getUsername() {
-        return username;
+        return List.of(new SimpleGrantedAuthority(role.getAuthority()));
     }
 
     @Override
@@ -59,8 +67,10 @@ public class User implements UserDetails {
         return true;
     }
 
+    // Using the enabled field instead of hardcoded true
     @Override
     public boolean isEnabled() {
-        return true;
+        return enabled;
     }
+
 }

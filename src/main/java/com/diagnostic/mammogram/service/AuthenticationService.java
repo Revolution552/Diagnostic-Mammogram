@@ -32,7 +32,7 @@ public class AuthenticationService {
             var user = User.builder()
                     .username(request.getUsername())
                     .password(passwordEncoder.encode(request.getPassword()))
-                    .role(request.getRoleEnum())  // Use the enum conversion
+                    .role(request.getRoleAsEnum())  // Changed from getRoleEnum() to getRoleAsEnum()
                     .build();
 
             userRepository.save(user);
@@ -41,10 +41,10 @@ public class AuthenticationService {
             return AuthenticationResponse.builder()
                     .token(jwtToken)
                     .username(user.getUsername())
-                    .role(user.getRole().name())  // Return enum name as String
+                    .role(user.getRole().name())
                     .build();
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid role specified");
+            throw new IllegalArgumentException("Invalid role specified: " + e.getMessage());
         }
     }
 

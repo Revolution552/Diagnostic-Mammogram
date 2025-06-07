@@ -1,0 +1,13 @@
+package com.diagnostic.mammogram;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class MammogramApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(MammogramApplication.class, args);
+	}
+
+}

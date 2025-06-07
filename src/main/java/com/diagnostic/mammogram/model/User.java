@@ -36,6 +36,7 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private boolean enabled = true;
 
+
     public enum Role {
         ADMIN,
         DOCTOR,

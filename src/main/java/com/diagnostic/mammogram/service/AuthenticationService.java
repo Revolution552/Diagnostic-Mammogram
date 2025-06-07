@@ -1,14 +1,17 @@
 package com.diagnostic.mammogram.service;
 
-
 import com.diagnostic.mammogram.dto.request.AuthenticationRequest;
 import com.diagnostic.mammogram.dto.request.RegisterRequest;
 import com.diagnostic.mammogram.dto.response.AuthenticationResponse;
+import com.diagnostic.mammogram.exception.InvalidRoleException;
+import com.diagnostic.mammogram.exception.UsernameExistsException;
 import com.diagnostic.mammogram.model.User;
 import com.diagnostic.mammogram.repository.UserRepository;
 import com.diagnostic.mammogram.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,45 +27,63 @@ public class AuthenticationService {
     private final AuthenticationManager authenticationManager;
 
     public AuthenticationResponse register(RegisterRequest request) {
+        // Validate username availability
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new IllegalStateException("Username already exists");
+            throw new UsernameExistsException(
+                    "Username '" + request.getUsername() + "' already exists");
         }
 
         try {
+            // Build and save user
             var user = User.builder()
-                    .username(request.getUsername())
+                    .username(request.getUsername().trim())
                     .password(passwordEncoder.encode(request.getPassword()))
-                    .role(request.getRoleAsEnum())  // Changed from getRoleEnum() to getRoleAsEnum()
+                    .role(request.getRoleAsEnum())
                     .build();
 
             userRepository.save(user);
 
+            // Generate JWT token
             var jwtToken = jwtService.generateToken(user);
             return AuthenticationResponse.builder()
                     .token(jwtToken)
                     .username(user.getUsername())
                     .role(user.getRole().name())
                     .build();
+
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid role specified: " + e.getMessage());
+            throw new InvalidRoleException("Invalid role specified: " + request.getRole());
         }
     }
 
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getUsername(),
-                        request.getPassword()
-                )
-        );
+        try {
+            // First check if user exists and is enabled
+            var user = userRepository.findByUsername(request.getUsername())
+                    .orElseThrow(() -> new UsernameNotFoundException("Invalid credentials"));
 
-        var user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+            if (!user.isEnabled()) {
+                throw new DisabledException("Account is disabled. Please contact support.");
+            }
 
-        return AuthenticationResponse.builder()
-                .token(jwtService.generateToken(user))
-                .username(user.getUsername())
-                .role(user.getRole().name())  // Convert enum to string
-                .build();
+            // Then authenticate credentials
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.getUsername(),
+                            request.getPassword()
+                    )
+            );
+
+            return AuthenticationResponse.builder()
+                    .token(jwtService.generateToken(user))
+                    .username(user.getUsername())
+                    .role(user.getRole().name())
+                    .build();
+
+        } catch (BadCredentialsException e) {
+            throw new BadCredentialsException("Invalid username or password");
+        } catch (DisabledException e) {
+            throw new DisabledException(e.getMessage()); // Re-throw with custom message
+        }
     }
 }

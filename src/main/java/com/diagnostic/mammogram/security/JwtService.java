@@ -1,10 +1,9 @@
 package com.diagnostic.mammogram.security;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -32,11 +31,19 @@ public class JwtService {
             Map<String, Object> extraClaims,
             UserDetails userDetails
     ) {
+        return buildToken(extraClaims, userDetails, jwtExpiration);
+    }
+
+    private String buildToken(
+            Map<String, Object> extraClaims,
+            UserDetails userDetails,
+            long expiration
+    ) {
         return Jwts.builder()
                 .setClaims(extraClaims)
                 .setSubject(userDetails.getUsername())
                 .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
+                .setExpiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(getSignInKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -51,11 +58,23 @@ public class JwtService {
     }
 
     private Claims extractAllClaims(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(getSignInKey())
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
+        try {
+            return Jwts.parserBuilder()
+                    .setSigningKey(getSignInKey())
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+        } catch (ExpiredJwtException e) {
+            throw new JwtException("Expired JWT token");
+        } catch (UnsupportedJwtException e) {
+            throw new JwtException("Unsupported JWT token");
+        } catch (MalformedJwtException e) {
+            throw new JwtException("Invalid JWT token");
+        } catch (SignatureException e) {
+            throw new JwtException("JWT signature validation failed");
+        } catch (IllegalArgumentException e) {
+            throw new JwtException("JWT claims string is empty");
+        }
     }
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
@@ -73,6 +92,12 @@ public class JwtService {
 
     private Key getSignInKey() {
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+        if (keyBytes.length < 32) {
+            throw new IllegalStateException(
+                    "JWT key must be at least 256 bits (32 bytes). " +
+                            "Current key is only " + (keyBytes.length * 8) + " bits."
+            );
+        }
         return Keys.hmacShaKeyFor(keyBytes);
     }
 }

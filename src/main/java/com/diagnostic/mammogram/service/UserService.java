@@ -1,17 +1,21 @@
 package com.diagnostic.mammogram.service;
 
 import com.diagnostic.mammogram.dto.request.RegisterRequest;
+import com.diagnostic.mammogram.exception.UserCreationException;
 import com.diagnostic.mammogram.exception.UserNotFoundException;
 import com.diagnostic.mammogram.exception.UsernameExistsException;
 import com.diagnostic.mammogram.model.User;
 import com.diagnostic.mammogram.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -19,28 +23,36 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public User createUser(String username, String password, User.Role role) {
-        if (userRepository.existsByUsername(username)) {
-            throw new UsernameExistsException(username);
+    public User createUser(RegisterRequest request) {
+        log.info("Creating user: {}", request.getUsername()); // Now works
+        // Check username availability first
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new UsernameExistsException(request.getUsername());
         }
 
-        User user = User.builder()
-                .username(username)
-                .password(passwordEncoder.encode(password))
-                .role(role)
-                .enabled(true)
-                .build();
+        // Create and save new user
+        User user = new User();
+        user.setUsername(request.getUsername());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRole(User.Role.valueOf(request.getRole()));
+        user.setEnabled(true); // Default to enabled
 
         return userRepository.save(user);
     }
 
     public User createUserFromRequest(RegisterRequest request) {
-        return createUser(
-                request.getUsername(),
-                request.getPassword(),
-                request.getRoleAsEnum()
-        );
+        try {
+            return createUser(request);
+        } catch (UsernameExistsException ex) {
+            // Log the specific conflict
+            log.warn("Registration failed - username already exists: {}", request.getUsername());
+            throw ex;
+        } catch (Exception ex) {
+            log.error("User creation failed for {}", request.getUsername(), ex);
+            throw new UserCreationException("Failed to create user: " + ex.getMessage());
+        }
     }
+
 
     public User getUserById(Long userId) {
         return userRepository.findById(userId)

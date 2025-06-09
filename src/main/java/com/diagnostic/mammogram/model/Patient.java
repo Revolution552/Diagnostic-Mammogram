@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,17 +24,27 @@ public class Patient {
     private Long id;
 
     @Column(nullable = false)
-    private String name;
-
-    @Column(nullable = false)
-    private int age;
+    private String fullName;
 
     @Column(nullable = false)
     private String gender;
 
+    @Column(nullable = false)
+    private LocalDate dateOfBirth;
+
+    @Column(nullable = false)
+    private String placeOfBirth;
+
+    @Column(nullable = false)
+    private int age;
+
     @Column(unique = true)
     private String contactInfo;
 
+    @Column(nullable = false)
+    private String education;
+
+    @Column(nullable = false)
     private String medicalHistory;
 
     @CreationTimestamp

@@ -16,7 +16,7 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
     // Basic CRUD operations are inherited from JpaRepository
 
     // Basic query methods
-    Optional<Patient> findByNameAndContactInfo(String name, String contactInfo);
+    Optional<Patient> findByFullNameAndContactInfo(String name, String contactInfo);
 
     List<Patient> findByAgeGreaterThanEqual(int age);
 
@@ -33,24 +33,24 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
     List<Patient> findByCreatedAtBefore(LocalDateTime date);
 
     // Mammogram result queries
-    @Query("SELECT DISTINCT p FROM Patient p JOIN p.mammograms m WHERE m.result = :result ORDER BY p.name")
+    @Query("SELECT DISTINCT p FROM Patient p JOIN p.mammograms m WHERE m.result = :result ORDER BY p.fullName")
     List<Patient> findByMammogramResult(@Param("result") String result);
 
     @Query("SELECT p FROM Patient p WHERE EXISTS (SELECT 1 FROM p.mammograms m WHERE m.result = :result)")
     List<Patient> findPatientsWithAtLeastOneMammogramResult(@Param("result") String result);
 
     // Projection queries
-    @Query("SELECT p.name, p.age, p.gender FROM Patient p WHERE p.age BETWEEN :minAge AND :maxAge")
+    @Query("SELECT p.fullName, p.age, p.gender FROM Patient p WHERE p.age BETWEEN :minAge AND :maxAge")
     List<Object[]> findPatientDemographicsByAgeRange(@Param("minAge") int minAge, @Param("maxAge") int maxAge);
 
     // Advanced search combining multiple criteria
     @Query("SELECT p FROM Patient p WHERE " +
-            "(:name IS NULL OR p.name LIKE %:name%) AND " +
+            "(:name IS NULL OR p.fullName LIKE %:name%) AND " +
             "(:minAge IS NULL OR p.age >= :minAge) AND " +
             "(:maxAge IS NULL OR p.age <= :maxAge) AND " +
             "(:gender IS NULL OR p.gender = :gender)")
     List<Patient> advancedSearch(
-            @Param("name") String name,
+            @Param("fullName") String fullName,
             @Param("minAge") Integer minAge,
             @Param("maxAge") Integer maxAge,
             @Param("gender") String gender);
@@ -70,7 +70,7 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
 
     // Existence checks
     boolean existsByContactInfo(String contactInfo);
-    boolean existsByNameAndMedicalHistoryContaining(String name, String medicalHistoryTerm);
+    boolean existsByFullNameAndMedicalHistoryContaining(String name, String medicalHistoryTerm);
 
     // Custom delete operations
     void deleteByContactInfo(String contactInfo);

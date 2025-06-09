@@ -75,7 +75,7 @@ public class MammogramController {
             // Include only necessary patient details
             Map<String, Object> patientResponse = new HashMap<>();
             patientResponse.put("id", patient.getId());
-            patientResponse.put("name", patient.getName());
+            patientResponse.put("name", patient.getFullName());
             mammogramResponse.put("patient", patientResponse);
 
             response.put("status", "success");

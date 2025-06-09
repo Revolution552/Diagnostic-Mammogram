@@ -27,4 +27,5 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
 
     @Query("SELECT COUNT(r) > 0 FROM Report r WHERE r.mammogram.id = :mammogramId AND r.finalized = true")
     boolean existsFinalizedReportByMammogramId(@Param("mammogramId") Long mammogramId);
+
 }

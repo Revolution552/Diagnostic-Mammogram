@@ -86,7 +86,7 @@ public class PatientController {
         } catch (DataIntegrityViolationException ex) {
             String errorMessage = "Contact information already exists";
             if (ex.getMessage().contains("patients.UK5eoemimnyup3a88rtkpkq7rpf")) {
-                errorMessage = "Email address already registered: " + request.getContactInfo();
+                errorMessage = "Phone Number already registered: " + request.getContactInfo();
             }
 
             log.warn("[{}] Data integrity violation: {}", operation, errorMessage);

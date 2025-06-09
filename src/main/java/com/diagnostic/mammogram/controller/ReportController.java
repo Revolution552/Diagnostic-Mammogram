@@ -28,7 +28,8 @@ public class ReportController {
 
     private final ReportService reportService;
 
-    @GetMapping("/mammogram/{mammogramId}/pdf")
+    @GetMapping(value = "/mammogram/{mammogramId}/pdf",
+            produces = {MediaType.APPLICATION_PDF_VALUE, MediaType.APPLICATION_JSON_VALUE})
     public ResponseEntity<?> generatePdfReport(@PathVariable Long mammogramId) {
         Map<String, Object> response = new HashMap<>();
         log.info("Received request to generate PDF report for mammogram ID: {}", mammogramId);
@@ -45,7 +46,6 @@ public class ReportController {
                     .filename(reportPdfResponse.getFilename())
                     .build();
 
-            // Success response for PDF file
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
                     .contentType(MediaType.APPLICATION_PDF)
@@ -53,15 +53,17 @@ public class ReportController {
                     .body(resource);
 
         } catch (ResourceNotFoundException ex) {
-            String errorMessage = String.format("Mammogram not found with ID: %d", mammogramId);
+            String errorMessage = String.format("Report not found for mammogram ID: %d", mammogramId);
             log.error("{}: {}", errorMessage, ex.getMessage());
 
             response.put("status", "error");
             response.put("errorCode", "RESOURCE_NOT_FOUND");
             response.put("message", errorMessage);
-            response.put("details", "Please verify the mammogram ID and try again");
+            response.put("details", "Please verify the mammogram ID exists and has a generated report");
 
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(response);
 
         } catch (ReportGenerationException ex) {
             String errorMessage = String.format("Report generation failed for mammogram ID: %d", mammogramId);
@@ -70,9 +72,11 @@ public class ReportController {
             response.put("status", "error");
             response.put("errorCode", "REPORT_GENERATION_FAILED");
             response.put("message", errorMessage);
-            response.put("details", ex.getCause() != null ? ex.getCause().getMessage() : "Technical error during report generation");
+            response.put("details", ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage());
 
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(response);
 
         } catch (Exception ex) {
             String errorMessage = "Unexpected error occurred during report generation";
@@ -83,7 +87,9 @@ public class ReportController {
             response.put("message", errorMessage);
             response.put("details", "Please contact support with this reference: " + System.currentTimeMillis());
 
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(response);
         }
     }
 }

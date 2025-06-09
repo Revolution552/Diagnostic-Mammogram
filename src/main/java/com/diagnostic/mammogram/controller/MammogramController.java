@@ -41,6 +41,11 @@ public class MammogramController {
             logger.info("Starting mammogram upload for patient ID: {}", patientId);
             logger.debug("File details - Name: {}, Size: {} bytes", file.getOriginalFilename(), file.getSize());
 
+            // Validate file input
+            if (file.isEmpty()) {
+                throw new IllegalArgumentException("File cannot be empty");
+            }
+
             Patient patient = patientRepository.findById(patientId)
                     .orElseThrow(() -> {
                         String errorMsg = "Patient not found with ID: " + patientId;
@@ -60,9 +65,22 @@ public class MammogramController {
             Mammogram savedMammogram = mammogramRepository.save(mammogram);
             logger.info("Mammogram record successfully saved with ID: {}", savedMammogram.getId());
 
+            // Create a response DTO to avoid lazy loading issues
+            Map<String, Object> mammogramResponse = new HashMap<>();
+            mammogramResponse.put("id", savedMammogram.getId());
+            mammogramResponse.put("imagePath", savedMammogram.getImagePath());
+            mammogramResponse.put("uploadDate", savedMammogram.getUploadDate());
+            mammogramResponse.put("notes", savedMammogram.getNotes());
+
+            // Include only necessary patient details
+            Map<String, Object> patientResponse = new HashMap<>();
+            patientResponse.put("id", patient.getId());
+            patientResponse.put("name", patient.getName());
+            mammogramResponse.put("patient", patientResponse);
+
             response.put("status", "success");
             response.put("message", "Mammogram uploaded successfully");
-            response.put("data", savedMammogram);
+            response.put("data", mammogramResponse);
 
             return ResponseEntity.ok(response);
 
@@ -72,10 +90,17 @@ public class MammogramController {
             response.put("message", ex.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
 
+        } catch (IllegalArgumentException ex) {
+            logger.error("Validation error: {}", ex.getMessage());
+            response.put("status", "error");
+            response.put("message", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+
         } catch (Exception ex) {
             logger.error("Error occurred during mammogram upload: {}", ex.getMessage(), ex);
             response.put("status", "error");
             response.put("message", "An error occurred while uploading the mammogram");
+            response.put("details", ex.getMessage()); // Include specific error for debugging
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }

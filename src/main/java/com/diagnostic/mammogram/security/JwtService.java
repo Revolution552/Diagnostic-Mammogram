@@ -3,7 +3,6 @@ package com.diagnostic.mammogram.security;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
-import io.jsonwebtoken.security.SignatureException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -14,6 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
+@SuppressWarnings("ALL")
 @Service
 public class JwtService {
 
@@ -23,40 +23,37 @@ public class JwtService {
     @Value("${jwt.expiration}")
     private long jwtExpiration;
 
+    // Generate token with default claims
     public String generateToken(UserDetails userDetails) {
         return generateToken(new HashMap<>(), userDetails);
     }
 
+    // Generate token with custom claims
     public String generateToken(
             Map<String, Object> extraClaims,
             UserDetails userDetails
-    ) {
-        return buildToken(extraClaims, userDetails, jwtExpiration);
-    }
-
-    private String buildToken(
-            Map<String, Object> extraClaims,
-            UserDetails userDetails,
-            long expiration
     ) {
         return Jwts.builder()
                 .setClaims(extraClaims)
                 .setSubject(userDetails.getUsername())
                 .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
                 .signWith(getSignInKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
 
+    // Extract username from token
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
     }
 
+    // Generic method to extract any claim
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         final Claims claims = extractAllClaims(token);
         return claimsResolver.apply(claims);
     }
 
+    // Parse and validate all claims
     private Claims extractAllClaims(String token) {
         try {
             return Jwts.parserBuilder()
@@ -65,37 +62,39 @@ public class JwtService {
                     .parseClaimsJws(token)
                     .getBody();
         } catch (ExpiredJwtException e) {
-            throw new JwtException("Expired JWT token");
-        } catch (UnsupportedJwtException e) {
-            throw new JwtException("Unsupported JWT token");
+            throw new JwtException("Token expired");
         } catch (MalformedJwtException e) {
-            throw new JwtException("Invalid JWT token");
+            throw new JwtException("Invalid token format");
         } catch (SignatureException e) {
-            throw new JwtException("JWT signature validation failed");
-        } catch (IllegalArgumentException e) {
-            throw new JwtException("JWT claims string is empty");
+            throw new JwtException("Signature validation failed");
+        } catch (Exception e) {
+            throw new JwtException("Token validation error: " + e.getMessage());
         }
     }
 
+    // Validate token against UserDetails
     public boolean isTokenValid(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
-        return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
+        return username.equals(userDetails.getUsername()) && !isTokenExpired(token);
     }
 
+    // Check if token is expired
     private boolean isTokenExpired(String token) {
         return extractExpiration(token).before(new Date());
     }
 
+    // Extract expiration date
     private Date extractExpiration(String token) {
         return extractClaim(token, Claims::getExpiration);
     }
 
+    // Convert Base64 secret to a secure Key
     private Key getSignInKey() {
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
         if (keyBytes.length < 32) {
             throw new IllegalStateException(
-                    "JWT key must be at least 256 bits (32 bytes). " +
-                            "Current key is only " + (keyBytes.length * 8) + " bits."
+                    "JWT key must be at least 256 bits (32 bytes). Current: " +
+                            (keyBytes.length * 8) + " bits."
             );
         }
         return Keys.hmacShaKeyFor(keyBytes);

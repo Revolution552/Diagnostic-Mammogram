@@ -5,6 +5,8 @@ import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
@@ -44,6 +46,18 @@ public class User implements UserDetails {
 
         public String getAuthority() {
             return "ROLE_" + this.name();
+        }
+
+        public static Role fromString(String value) throws IllegalArgumentException {
+                try {
+                    return Role.valueOf(value.toUpperCase());
+                } catch (NullPointerException | IllegalArgumentException e) {
+                    throw new IllegalArgumentException(
+                            String.format("Invalid role '%s'. Valid roles are: %s",
+                                    value,
+                                    Arrays.toString(Role.values()))
+                    );
+                }
         }
     }
 

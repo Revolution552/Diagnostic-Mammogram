@@ -41,6 +41,7 @@ public class Patient {
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
-    @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "patient", fetch = FetchType.EAGER, orphanRemoval = true)
     private List<Mammogram> mammograms = new ArrayList<>();
+
 }

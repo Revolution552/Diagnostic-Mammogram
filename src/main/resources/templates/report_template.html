@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Mammogram Report</title>
+    <style>
+        /* Basic CSS for the PDF report */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20mm; /* A reasonable margin for printing */
+            font-size: 11pt;
+            line-height: 1.6;
+        }
+        h1, h2, h3 {
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+            margin-top: 20px;
+        }
+        .header, .footer {
+            text-align: center;
+            font-size: 9pt;
+            color: #777;
+            margin-bottom: 15px;
+        }
+        .section {
+            margin-bottom: 15px;
+        }
+        .label {
+            font-weight: bold;
+            display: inline-block;
+            width: 120px; /* Adjust as needed for alignment */
+        }
+        .value {
+            display: inline-block;
+        }
+        .findings, .conclusion, .recommendation {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 5px;
+            white-space: pre-wrap; /* Preserve line breaks */
+        }
+        .signature {
+            margin-top: 30px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+            font-size: 10pt;
+        }
+        .image-container {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .mammogram-image {
+            max-width: 100%; /* Ensure image fits within PDF width */
+            height: auto;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Mammogram Diagnostic Report</h1>
+    <p th:text="${'Report ID: ' + report.id}"></p>
+</div>
+
+<div class="section">
+    <h2>Patient Information</h2>
+    <p><span class="label">Patient Name:</span> <span class="value" th:text="${report.patientName}"></span></p>
+    <p><span class="label">Patient ID:</span> <span class="value" th:text="${report.patientId}"></span></p>
+</div>
+
+<div class="section">
+    <h2>Mammogram Details</h2>
+    <p><span class="label">Mammogram ID:</span> <span class="value" th:text="${report.mammogramId}"></span></p>
+    <p><span class="label">Upload Date:</span> <span class="value" th:text="${#temporals.format(report.mammogramUploadDate, 'dd-MM-yyyy HH:mm')}"></span></p>
+    <p><span class="label">Image Path/URL:</span> <span class="value" th:text="${report.mammogramImagePath}"></span></p>
+    <div th:if="${report.mammogramImagePath != null and !report.mammogramImagePath.isEmpty()}" class="image-container">
+        <p><strong>Associated Mammogram Image:</strong></p>
+        <img class="mammogram-image" th:src="${report.mammogramImagePath}" alt="Mammogram Image" />
+    </div>
+</div>
+
+<div class="section">
+    <h2>Report Details</h2>
+    <p><span class="label">Report Date:</span> <span class="value" th:text="${#temporals.format(report.reportDate, 'dd-MM-yyyy HH:mm')}"></span></p>
+    <p><span class="label">Last Updated:</span> <span class="value" th:text="${#temporals.format(report.lastUpdated, 'dd-MM-yyyy HH:mm')}"></span></p>
+    <p><span class="label">Status:</span> <span class="value" th:text="${report.status}"></span></p>
+</div>
+
+<div class="section">
+    <h2>Findings</h2>
+    <div class="findings" th:text="${report.findings}"></div>
+</div>
+
+<div class="section">
+    <h2>Conclusion</h2>
+    <div class="conclusion" th:text="${report.conclusion}"></div>
+</div>
+
+<div class="section">
+    <h2>Recommendation</h2>
+    <div class="recommendation" th:text="${report.recommendation}"></div>
+</div>
+
+<div class="signature">
+    <p>Report prepared by:</p>
+    <p th:text="${report.createdByUserFullName}"></p>
+    <p th:text="${report.createdByUserRole}"></p>
+    <p>Date: <span th:text="${#temporals.format(report.lastUpdated, 'dd-MM-yyyy')}"></span></p>
+</div>
+
+<div class="footer">
+    <p>&copy; <span th:text="${#temporals.year(#temporals.createNow())}"></span> Mammogram Diagnostic System</p>
+</div>
+
+</body>
+</html>

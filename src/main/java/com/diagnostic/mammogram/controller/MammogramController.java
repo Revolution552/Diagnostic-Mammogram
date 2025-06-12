@@ -1,107 +1,179 @@
 package com.diagnostic.mammogram.controller;
 
-import com.diagnostic.mammogram.exception.ResourceNotFoundException;
-import com.diagnostic.mammogram.model.Mammogram;
-import com.diagnostic.mammogram.model.Patient;
-import com.diagnostic.mammogram.repository.MammogramRepository;
-import com.diagnostic.mammogram.repository.PatientRepository;
-import com.diagnostic.mammogram.service.ImageStorageService;
+import com.diagnostic.mammogram.dto.request.MammogramUploadRequest;
+import com.diagnostic.mammogram.dto.response.MammogramResponse;
+import com.diagnostic.mammogram.service.MammogramService;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-@RestController
-@RequestMapping("/api/mammograms")
-@RequiredArgsConstructor
+@RestController // Marks this class as a Spring REST Controller
+@RequestMapping("/api/mammograms") // Base path for all endpoints in this controller
+@RequiredArgsConstructor // Lombok: Generates constructor with all final fields
+@Slf4j // Lombok: Generates a logger field
 public class MammogramController {
 
-    private static final Logger logger = LoggerFactory.getLogger(MammogramController.class);
+    private final MammogramService mammogramService;
 
-    private final MammogramRepository mammogramRepository;
-    private final PatientRepository patientRepository;
-    private final ImageStorageService imageStorageService;
-
-    @PostMapping("/upload/{patientId}")
+    /**
+     * Uploads a new mammogram image and processes it.
+     * Accessible by ADMIN, DOCTOR, RADIOLOGIST.
+     *
+     * @param patientId The ID of the patient associated with the mammogram.
+     * @param imageFile The mammogram image file.
+     * @param notes Optional notes for the mammogram.
+     * @return ResponseEntity with a Map representing the response and HTTP status 201 (Created).
+     */
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'RADIOLOGIST')")
     public ResponseEntity<Map<String, Object>> uploadMammogram(
-            @PathVariable Long patientId,
-            @RequestParam("file") MultipartFile file,
-            @RequestParam(required = false) String notes) {
+            @RequestParam("patientId") Long patientId,
+            @RequestPart("imageFile") MultipartFile imageFile,
+            @RequestParam(value = "notes", required = false) String notes) {
+        log.info("Received request to upload mammogram for patient ID: {}", patientId);
 
-        Map<String, Object> response = new HashMap<>();
+        MammogramUploadRequest uploadRequest = new MammogramUploadRequest();
+        uploadRequest.setPatientId(patientId);
+        uploadRequest.setImageFile(imageFile);
+        uploadRequest.setNotes(notes);
 
-        try {
-            logger.info("Starting mammogram upload for patient ID: {}", patientId);
-            logger.debug("File details - Name: {}, Size: {} bytes", file.getOriginalFilename(), file.getSize());
+        MammogramResponse responseData = mammogramService.uploadMammogram(uploadRequest);
+        log.info("Mammogram uploaded successfully with ID: {}", responseData.getId());
 
-            // Validate file input
-            if (file.isEmpty()) {
-                throw new IllegalArgumentException("File cannot be empty");
-            }
+        // Construct the HashMap response
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("success", true);
+        responseMap.put("message", "Mammogram uploaded successfully.");
+        responseMap.put("data", responseData);
+        responseMap.put("status", HttpStatus.CREATED.value());
 
-            Patient patient = patientRepository.findById(patientId)
-                    .orElseThrow(() -> {
-                        String errorMsg = "Patient not found with ID: " + patientId;
-                        logger.error(errorMsg);
-                        return new ResourceNotFoundException(errorMsg);
-                    });
+        return new ResponseEntity<>(responseMap, HttpStatus.CREATED);
+    }
 
-            String imagePath = imageStorageService.storeImage(file);
-            logger.info("Image successfully stored at path: {}", imagePath);
+    /**
+     * Retrieves a mammogram by its ID.
+     * Accessible by ADMIN, DOCTOR, RADIOLOGIST.
+     *
+     * @param id The ID of the mammogram to retrieve.
+     * @return ResponseEntity with a Map representing the response and HTTP status 200 (OK).
+     */
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'RADIOLOGIST')")
+    public ResponseEntity<Map<String, Object>> getMammogramById(@PathVariable Long id) {
+        log.info("Received request to get mammogram by ID: {}", id);
+        MammogramResponse responseData = mammogramService.getMammogramById(id);
 
-            Mammogram mammogram = new Mammogram();
-            mammogram.setPatient(patient);
-            mammogram.setImagePath(imagePath);
-            mammogram.setUploadDate(new Date());
-            mammogram.setNotes(notes);
+        // Construct the HashMap response
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("success", true);
+        responseMap.put("message", "Mammogram retrieved successfully.");
+        responseMap.put("data", responseData);
+        responseMap.put("status", HttpStatus.OK.value());
 
-            Mammogram savedMammogram = mammogramRepository.save(mammogram);
-            logger.info("Mammogram record successfully saved with ID: {}", savedMammogram.getId());
+        return ResponseEntity.ok(responseMap);
+    }
 
-            // Create a response DTO to avoid lazy loading issues
-            Map<String, Object> mammogramResponse = new HashMap<>();
-            mammogramResponse.put("id", savedMammogram.getId());
-            mammogramResponse.put("imagePath", savedMammogram.getImagePath());
-            mammogramResponse.put("uploadDate", savedMammogram.getUploadDate());
-            mammogramResponse.put("notes", savedMammogram.getNotes());
+    /**
+     * Retrieves all mammograms in the system.
+     * Accessible by ADMIN, RADIOLOGIST.
+     *
+     * @return ResponseEntity with a Map representing the response and HTTP status 200 (OK).
+     */
+    @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RADIOLOGIST')")
+    public ResponseEntity<Map<String, Object>> getAllMammograms() {
+        log.info("Received request to get all mammograms.");
+        List<MammogramResponse> responseData = mammogramService.getAllMammograms();
 
-            // Include only necessary patient details
-            Map<String, Object> patientResponse = new HashMap<>();
-            patientResponse.put("id", patient.getId());
-            patientResponse.put("name", patient.getFullName());
-            mammogramResponse.put("patient", patientResponse);
+        // Construct the HashMap response
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("success", true);
+        responseMap.put("message", "All mammograms retrieved successfully.");
+        responseMap.put("data", responseData);
+        responseMap.put("status", HttpStatus.OK.value());
 
-            response.put("status", "success");
-            response.put("message", "Mammogram uploaded successfully");
-            response.put("data", mammogramResponse);
+        return ResponseEntity.ok(responseMap);
+    }
 
-            return ResponseEntity.ok(response);
+    /**
+     * Retrieves all mammograms for a specific patient.
+     * Accessible by ADMIN, DOCTOR, RADIOLOGIST.
+     *
+     * @param patientId The ID of the patient.
+     * @return ResponseEntity with a Map representing the response and HTTP status 200 (OK).
+     */
+    @GetMapping("/patient/{patientId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'RADIOLOGIST')")
+    public ResponseEntity<Map<String, Object>> getMammogramsByPatientId(@PathVariable Long patientId) {
+        log.info("Received request to get mammograms for patient ID: {}", patientId);
+        List<MammogramResponse> responseData = mammogramService.getMammogramsByPatientId(patientId);
 
-        } catch (ResourceNotFoundException ex) {
-            logger.error("Resource not found error: {}", ex.getMessage());
-            response.put("status", "error");
-            response.put("message", ex.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        // Construct the HashMap response
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("success", true);
+        responseMap.put("message", "Mammograms for patient " + patientId + " retrieved successfully.");
+        responseMap.put("data", responseData);
+        responseMap.put("status", HttpStatus.OK.value());
 
-        } catch (IllegalArgumentException ex) {
-            logger.error("Validation error: {}", ex.getMessage());
-            response.put("status", "error");
-            response.put("message", ex.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        return ResponseEntity.ok(responseMap);
+    }
 
-        } catch (Exception ex) {
-            logger.error("Error occurred during mammogram upload: {}", ex.getMessage(), ex);
-            response.put("status", "error");
-            response.put("message", "An error occurred while uploading the mammogram");
-            response.put("details", ex.getMessage()); // Include specific error for debugging
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-        }
+    /**
+     * Updates the notes for a specific mammogram.
+     * Accessible by ADMIN, DOCTOR, RADIOLOGIST.
+     *
+     * @param id The ID of the mammogram to update.
+     * @param notes The new notes for the mammogram.
+     * @return ResponseEntity with a Map representing the response and HTTP status 200 (OK).
+     */
+    @PutMapping("/{id}/notes")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'RADIOLOGIST')")
+    public ResponseEntity<Map<String, Object>> updateMammogramNotes(
+            @PathVariable Long id,
+            @RequestParam("notes") String notes) {
+        log.info("Received request to update notes for mammogram ID: {}", id);
+        MammogramResponse responseData = mammogramService.updateMammogram(id, notes);
+
+        // Construct the HashMap response
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("success", true);
+        responseMap.put("message", "Mammogram notes updated successfully.");
+        responseMap.put("data", responseData);
+        responseMap.put("status", HttpStatus.OK.value());
+
+        return ResponseEntity.ok(responseMap);
+    }
+
+    /**
+     * Deletes a mammogram by its ID, including the associated image file.
+     * Accessible by ADMIN, RADIOLOGIST.
+     *
+     * @param id The ID of the mammogram to delete.
+     * @return ResponseEntity with a Map representing the response and HTTP status 204 (No Content).
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RADIOLOGIST')")
+    public ResponseEntity<Map<String, Object>> deleteMammogram(@PathVariable Long id) {
+        log.info("Received request to delete mammogram by ID: {}", id);
+        mammogramService.deleteMammogram(id);
+        log.info("Mammogram ID {} deleted successfully.", id);
+
+        // Construct the HashMap response
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("success", true);
+        responseMap.put("message", "Mammogram ID " + id + " deleted successfully.");
+        // No 'data' field for 204 No Content typically, but can be added if desired
+        responseMap.put("status", HttpStatus.NO_CONTENT.value());
+
+        return new ResponseEntity<>(responseMap, HttpStatus.NO_CONTENT); // 204 No Content
     }
 }

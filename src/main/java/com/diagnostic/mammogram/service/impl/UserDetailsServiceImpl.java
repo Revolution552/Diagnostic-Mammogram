@@ -1,4 +1,4 @@
-package com.diagnostic.mammogram.service;
+package com.diagnostic.mammogram.service.impl;
 
 import com.diagnostic.mammogram.repository.UserRepository;
 import lombok.RequiredArgsConstructor;

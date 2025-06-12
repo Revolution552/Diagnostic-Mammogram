@@ -1,31 +1,28 @@
 package com.diagnostic.mammogram.repository;
 
+import com.diagnostic.mammogram.model.Mammogram;
 import com.diagnostic.mammogram.model.Report;
-import org.springframework.data.jpa.repository.EntityGraph;
+import com.diagnostic.mammogram.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
-@SuppressWarnings("ALL")
+@Repository // Marks this interface as a Spring Data JPA repository
 public interface ReportRepository extends JpaRepository<Report, Long> {
 
-    // Option 1: Entity Graph approach (recommended)
-    @EntityGraph(attributePaths = {"mammogram", "mammogram.patient"})
-    Optional<Report> findWithDetailsByMammogramId(Long mammogramId);
+    // Find a report by its associated mammogram. Since it's one-to-one and unique, Optional is good.
+    Optional<Report> findByMammogram(Mammogram mammogram);
 
-    // Option 2: JPQL query approach (alternative)
-    @Query("SELECT r FROM Report r JOIN FETCH r.mammogram m JOIN FETCH m.patient WHERE m.id = :mammogramId")
-    Optional<Report> findByMammogramIdFetchAll(@Param("mammogramId") Long mammogramId);
+    // Find all reports created by a specific user (radiologist/doctor)
+    List<Report> findByCreatedBy(User createdBy);
 
-    // Option 3: Simple find by mammogram ID (basic)
-    Optional<Report> findByMammogramId(Long mammogramId);
+    // Find all reports for a specific patient (through mammogram's patient)
+    // This requires a JOIN in JPQL or a derived query
+    List<Report> findByMammogramPatientId(Long patientId);
 
-    // Additional useful queries
-    boolean existsByMammogramId(Long mammogramId);
-
-    @Query("SELECT COUNT(r) > 0 FROM Report r WHERE r.mammogram.id = :mammogramId AND r.finalized = true")
-    boolean existsFinalizedReportByMammogramId(@Param("mammogramId") Long mammogramId);
-
+    // You might also add methods like:
+    // List<Report> findByStatus(ReportStatus status);
+    // List<Report> findByReportDateBetween(LocalDateTime startDate, LocalDateTime endDate);
 }

@@ -1,19 +1,23 @@
 package com.diagnostic.mammogram.dto.response;
 
+import com.diagnostic.mammogram.dto.AIDiagnosis;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
-import java.util.Date;
-
+import java.time.LocalDateTime;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class MammogramResponse {
     private Long id;
+    private Long patientId; // Just the ID, not the full patient object for simplicity in response
+    private String patientName; // Potentially include patient name for convenience
     private String imagePath;
-    private Date uploadDate;
+    private LocalDateTime dateUploaded;
     private String notes;
-    // Add patient details you want to expose
-    private Long patientId;
-    private String patientName;
-
-    // constructor, getters, setters
+    private AIDiagnosis aiDiagnosis; // Include AI diagnosis results if available for this mammogram
 }

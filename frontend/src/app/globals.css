@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Any existing custom CSS, if you had any that wasn't Tailwind-related,
+   can be added here. Ensure no background images or SVG patterns are
+   inadvertently applied globally if they are not intended. */
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  /* Make sure no other CSS is trying to draw a background graphic here */
+}
+
+/* Remove any specific CSS that might be drawing the semi-circle */
+/* If you had styles like:
+.some-class::before {
+    content: '';
+    background: url(...) or radial-gradient(...);
+    ...
+}
+They should be removed unless intentionally part of the design.
+The provided React components do not introduce such a graphic themselves.
+*/

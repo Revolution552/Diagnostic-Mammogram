@@ -17,6 +17,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration; // Import CorsConfiguration
+import org.springframework.web.cors.CorsConfigurationSource; // Import CorsConfigurationSource
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource; // Import UrlBasedCorsConfigurationSource
+
+import java.util.Arrays; // Import Arrays
+import java.util.List; // Import List
 
 @Configuration
 @EnableWebSecurity
@@ -36,21 +42,24 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // <--- RE-ADDED: Integrate CORS configuration
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/api/users/register/**",
-                                "/api/patients/**",
+                                "/api/patients/**", // Assuming patient fetching might be public or handled by roles later
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
+                        // <--- RE-ADDED: Allow OPTIONS requests for all paths (crucial for CORS preflight)
+                        .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
 
                         // Role-based endpoints
                         .requestMatchers("/api/reports/**").hasAnyRole("RADIOLOGIST", "DOCTOR")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/mammograms/**").hasAnyRole("RADIOLOGIST", "DOCTOR")
+                        .requestMatchers("/api/mammograms/**").hasAnyRole("RADIOLOGIST", "DOCTOR") // Ensure this role is correct for upload
 
                         // All other endpoints require authentication
                         .anyRequest().authenticated()
@@ -80,5 +89,20 @@ public class SecurityConfig {
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config)
             throws Exception {
         return config.getAuthenticationManager();
+    }
+
+    // <--- RE-ADDED: Define a CorsConfigurationSource bean for global CORS settings
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowCredentials(true);
+        config.setAllowedOrigins(List.of("http://localhost:3000")); // Allow your frontend origin
+        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")); // Allow all necessary methods
+        config.setAllowedHeaders(List.of("*")); // Allow all headers
+        config.setExposedHeaders(List.of("Authorization", "Content-Type")); // Expose headers if needed by frontend
+        config.setMaxAge(3600L); // Cache preflight response for 1 hour
+        source.registerCorsConfiguration("/**", config); // Apply this config to all paths
+        return source;
     }
 }

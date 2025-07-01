@@ -1,19 +1,20 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import MessageDisplay from './MessageDisplay'; // Import the reusable message component
+import MessageDisplay from './MessageDisplay'; // Assuming MessageDisplay is in the same directory
 
 interface ReportManagementViewProps {
     API_BASE_URL: string;
     authToken: string | null;
-    getAuthHeaders: (contentType?: string) => HeadersInit;
+    getAuthHeaders: (contentType?: string) => HeadersInit; // Added this prop
 }
 
 const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_URL, authToken, getAuthHeaders }) => {
     const [newReport, setNewReport] = useState({
         mammogramId: '',
         patientId: '',
-        diagnosis: '',
+        findings: '',
+        conclusion: '',
         recommendations: '',
         reportDate: new Date().toISOString().split('T')[0],
         createdByUserId: ''
@@ -27,6 +28,7 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
     const fetchReports = async () => {
         setReportLoading(true);
         setReportError(null);
+        setReportSuccessMessage(null);
 
         try {
             const response = await fetch(`${API_BASE_URL}/api/reports`, {
@@ -37,7 +39,7 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
             const data = await response.json();
 
             if (response.ok && data.success) {
-                setReports(data.data || []); // Provide fallback for data
+                setReports(data.data || []);
             } else {
                 setReportError(data.message || 'Failed to fetch reports.');
             }
@@ -52,6 +54,19 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
     const handleCreateReport = async (event: React.FormEvent) => {
         event.preventDefault();
 
+        if (!newReport.findings.trim()) {
+            setReportError('Findings cannot be empty.');
+            return;
+        }
+        if (!newReport.conclusion.trim()) {
+            setReportError('Conclusion cannot be empty.');
+            return;
+        }
+        if (!newReport.recommendations.trim()) {
+            setReportError('Recommendations cannot be empty.');
+            return;
+        }
+
         setReportLoading(true);
         setReportError(null);
         setReportSuccessMessage(null);
@@ -60,7 +75,10 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
             ...newReport,
             mammogramId: Number(newReport.mammogramId),
             patientId: Number(newReport.patientId),
-            createdByUserId: newReport.createdByUserId ? Number(newReport.createdByUserId) : undefined
+            createdByUserId: newReport.createdByUserId ? Number(newReport.createdByUserId) : undefined,
+            findings: newReport.findings.trim(),
+            conclusion: newReport.conclusion.trim(),
+            recommendations: newReport.recommendations.trim(),
         };
 
         try {
@@ -76,11 +94,17 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
                 setReportSuccessMessage(data.message || 'Report created successfully!');
                 await fetchReports();
                 setNewReport({
-                    mammogramId: '', patientId: '', diagnosis: '',
+                    mammogramId: '', patientId: '',
+                    findings: '', conclusion: '',
                     recommendations: '', reportDate: new Date().toISOString().split('T')[0], createdByUserId: ''
                 });
             } else {
-                setReportError(data.message || 'Failed to create report. Please check inputs.');
+                if (data.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+                    const errorMessages = data.errors.map((err: any) => err.defaultMessage || err.message).join('; ');
+                    setReportError(`Validation failed: ${errorMessages}`);
+                } else {
+                    setReportError(data.message || `Failed to create report. Server responded with status: ${response.status} ${response.statusText}.`);
+                }
             }
         } catch (err: any) {
             console.error('Error during report creation:', err);
@@ -93,6 +117,7 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
     const handleDownloadPdf = async (reportId: number) => {
         setReportLoading(true);
         setReportError(null);
+        setReportSuccessMessage(null);
 
         try {
             const response = await fetch(`${API_BASE_URL}/api/reports/${reportId}/pdf`, {
@@ -128,7 +153,7 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
         if (authToken) {
             void fetchReports();
         }
-    }, [authToken]); // Dependency on authToken
+    }, [authToken]);
 
     return (
         <div className="space-y-8">
@@ -147,9 +172,14 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
                                value={newReport.patientId} onChange={(e) => setNewReport({ ...newReport, patientId: e.target.value })} required />
                     </div>
                     <div className="md:col-span-2">
-                        <label htmlFor="diagnosis" className="block text-gray-700 text-sm font-semibold mb-1">Diagnosis:</label>
-                        <textarea id="diagnosis" rows="3" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-400 focus:border-blue-400"
-                                  value={newReport.diagnosis} onChange={(e) => setNewReport({ ...newReport, diagnosis: e.target.value })} required></textarea>
+                        <label htmlFor="findings" className="block text-gray-700 text-sm font-semibold mb-1">Findings:</label>
+                        <textarea id="findings" rows="3" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-400 focus:border-blue-400"
+                                  value={newReport.findings} onChange={(e) => setNewReport({ ...newReport, findings: e.target.value })} required></textarea>
+                    </div>
+                    <div className="md:col-span-2">
+                        <label htmlFor="conclusion" className="block text-gray-700 text-sm font-semibold mb-1">Conclusion:</label>
+                        <textarea id="conclusion" rows="3" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-400 focus:border-blue-400"
+                                  value={newReport.conclusion} onChange={(e) => setNewReport({ ...newReport, conclusion: e.target.value })} required></textarea>
                     </div>
                     <div className="md:col-span-2">
                         <label htmlFor="recommendations" className="block text-gray-700 text-sm font-semibold mb-1">Recommendations:</label>
@@ -187,8 +217,8 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
                         </button>
                     </div>
                 </form>
-                <MessageDisplay type="success" message={reportSuccessMessage} />
-                <MessageDisplay type="error" message={reportError} />
+                {reportSuccessMessage && <MessageDisplay type="success" message={reportSuccessMessage} />}
+                {reportError && <MessageDisplay type="error" message={reportError} />}
             </div>
 
             {/* List All Reports */}
@@ -214,7 +244,9 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mammogram ID</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Patient ID</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Diagnosis</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Findings</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Conclusion</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recommendations</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Report Date</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>
@@ -225,7 +257,9 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{report.id}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{report.mammogramId}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{report.patientId}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs overflow-hidden text-ellipsis">{report.diagnosis}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs overflow-hidden text-ellipsis">{report.findings}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs overflow-hidden text-ellipsis">{report.conclusion}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs overflow-hidden text-ellipsis">{report.recommendations}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{report.reportDate}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <button

@@ -6,11 +6,10 @@ import MessageDisplay from './MessageDisplay'; // Import the reusable message co
 interface MammogramUploadViewProps {
     API_BASE_URL: string;
     authToken: string | null;
-    getAuthHeaders: (contentType?: string) => HeadersInit;
 }
 
-const MammogramUploadView: React.FC<MammogramUploadViewProps> = ({ API_BASE_URL, authToken, getAuthHeaders }) => {
-    const [mammogramPatientId, setMammogramPatientId] = useState<string>('');
+const MammogramUploadView: React.FC<MammogramUploadViewProps> = ({ API_BASE_URL, authToken }) => {
+    const [mammogramPatientId, setMammogramPatientId] = useState<string>(''); // Keep as string for input field
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [mammogramNotes, setMammogramNotes] = useState<string>('');
     const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -28,8 +27,8 @@ const MammogramUploadView: React.FC<MammogramUploadViewProps> = ({ API_BASE_URL,
         } else {
             setImagePreview(null);
         }
-        setUploadError(null);
-        setUploadSuccessMessage(null);
+        setUploadError(null); // Clear errors on new file selection
+        setUploadSuccessMessage(null); // Clear success on new file selection
         setUploadedMammogramData(null);
     };
 
@@ -45,40 +44,56 @@ const MammogramUploadView: React.FC<MammogramUploadViewProps> = ({ API_BASE_URL,
             return;
         }
 
+        // Validate and convert patient ID to a number
+        const patientIdAsNumber = parseInt(mammogramPatientId, 10);
+        if (isNaN(patientIdAsNumber) || patientIdAsNumber <= 0) {
+            setUploadError('Please enter a valid positive Patient ID.');
+            return;
+        }
+
         setUploadLoading(true);
-        setUploadError(null);
-        setUploadSuccessMessage(null);
+        setUploadError(null); // Clear previous errors
+        setUploadSuccessMessage(null); // Clear previous success messages
         setUploadedMammogramData(null);
 
         const formData = new FormData();
-        formData.append('patientId', mammogramPatientId);
+        formData.append('patientId', patientIdAsNumber.toString());
         formData.append('imageFile', imageFile);
         if (mammogramNotes) {
             formData.append('notes', mammogramNotes);
         }
 
         try {
+            const headers = new Headers();
+            if (authToken) {
+                headers.append('Authorization', `Bearer ${authToken}`);
+            }
+
             const response = await fetch(`${API_BASE_URL}/api/mammograms`, {
                 method: 'POST',
-                headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : undefined,
+                headers: headers,
                 body: formData,
             });
 
             const data = await response.json();
 
+            // Check for 'success: true' in the response body
+            // This aligns with the backend response structure shown in the screenshot.
             if (response.ok && data.success) {
                 setUploadSuccessMessage(data.message || 'Mammogram uploaded successfully!');
                 setUploadedMammogramData(data.data);
+                // Clear form fields only on success
                 setMammogramPatientId('');
                 setImageFile(null);
                 setMammogramNotes('');
                 setImagePreview(null);
             } else {
-                setUploadError(data.message || 'Failed to upload mammogram. Check server logs.');
+                // If response.ok is false, or data.success is false
+                setUploadError(data.message || `Failed to upload mammogram. Server responded with status: ${response.status} ${response.statusText}.`);
             }
         } catch (err: any) {
             console.error('Error during mammogram upload:', err);
-            setUploadError('Network error or an unexpected issue occurred during upload.');
+            setUploadError('Network error or an unexpected issue occurred during upload. Please check your API_BASE_URL and network connection.');
         } finally {
             setUploadLoading(false);
         }
@@ -164,19 +179,17 @@ const MammogramUploadView: React.FC<MammogramUploadViewProps> = ({ API_BASE_URL,
                 </button>
             </form>
 
-            <MessageDisplay type="error" message={uploadError} />
-            <MessageDisplay
-                type="success"
-                message={uploadSuccessMessage}
-                extraContent={uploadedMammogramData && (
-                    <div className="mt-4">
-                        <h3 className="text-lg font-semibold text-green-800">Uploaded Data:</h3>
-                        <pre className="whitespace-pre-wrap font-mono text-sm bg-green-50 p-3 rounded-md overflow-x-auto border border-green-200">
-                            {JSON.stringify(uploadedMammogramData, null, 2)}
-                        </pre>
-                    </div>
-                )}
-            />
+            {/* Display error message only if uploadError is not null AND uploadSuccessMessage is null */}
+            {uploadError && !uploadSuccessMessage && <MessageDisplay type="error" message={uploadError} />}
+            {/* Display success message only if uploadSuccessMessage is not null */}
+            {uploadSuccessMessage && <MessageDisplay type="success" message={uploadSuccessMessage} extraContent={uploadedMammogramData && (
+                <div className="mt-4">
+                    <h3 className="text-lg font-semibold text-green-800">Uploaded Data:</h3>
+                    <pre className="whitespace-pre-wrap font-mono text-sm bg-green-50 p-3 rounded-md overflow-x-auto border border-green-200">
+                        {JSON.stringify(uploadedMammogramData, null, 2)}
+                    </pre>
+                </div>
+            )} />}
         </>
     );
 };

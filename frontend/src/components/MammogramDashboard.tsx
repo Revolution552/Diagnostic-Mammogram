@@ -7,6 +7,9 @@ import MammogramUploadView from './MammogramUploadView';
 import PatientManagementView from './PatientManagementView';
 import ReportManagementView from './ReportManagementView';
 import UserManagementView from './UserManagementView';
+// Import new password management components
+import ForgotPasswordView from './ForgotPasswordView';
+import ResetPasswordView from './ResetPasswordView';
 
 const MammogramDashboard = () => {
     // Shared Authentication States (managed here as they affect the entire app's access)
@@ -20,7 +23,10 @@ const MammogramDashboard = () => {
     const [loginError, setLoginError] = useState<string | null>(null);
     const [loginSuccessMessage, setLoginSuccessMessage] = useState<string | null>(null);
 
-    // Current View State
+    // New state to manage which authentication-related view is active
+    const [currentAuthView, setCurrentAuthView] = useState<'login' | 'forgotPassword' | 'resetPassword'>('login');
+
+    // Current Main View State (after successful login)
     const [currentView, setCurrentView] = useState<string>('mammogram');
 
     // Base URL for your Spring Boot API.
@@ -65,7 +71,6 @@ const MammogramDashboard = () => {
 
             const data = await response.json();
 
-            // *** CRITICAL CHANGE HERE: Check for data.status === "success" (string) ***
             // Strict check for a true successful login
             // This requires the HTTP response to be OK (2xx) AND
             // the backend's internal status to be "success" AND
@@ -78,11 +83,11 @@ const MammogramDashboard = () => {
                 setUsername('');
                 setPassword('');
             } else {
-                // This block handles ALL failure scenarios:
+                // This block handles all failure scenarios:
                 // 1. Non-2xx HTTP responses (e.g., 401 Unauthorized, 500 Internal Server Error)
                 // 2. 2xx HTTP responses where backend's internal status is NOT "success"
                 //    (e.g., for incorrect credentials, your backend might send status: "failure" or similar, or just omit the token)
-                // 3. 2xx HTTP responses where status is "success", but token is missing (which is still a login failure as we can't proceed).
+                // 3. 2xx HTTP responses where status is "success", but token is missing.
 
                 // Construct an error message from backend's response or a generic one
                 const errorMessage = data.message || `Authentication failed. Server responded with HTTP Status: ${response.status} ${response.statusText}.`;
@@ -105,7 +110,8 @@ const MammogramDashboard = () => {
         setIsLoggedIn(false);
         setUsername('');
         setPassword('');
-        setCurrentView('mammogram'); // Reset view on logout
+        setCurrentView('mammogram'); // Reset main view on logout
+        setCurrentAuthView('login'); // Reset auth view to login on logout
         setLoginError(null); // Clear any previous login errors
         setLoginSuccessMessage(null); // Clear any previous login messages
     };
@@ -115,18 +121,38 @@ const MammogramDashboard = () => {
             <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-4xl transform transition-all duration-300 hover:scale-[1.01] overflow-hidden">
 
                 {!isLoggedIn ? (
-                    // Render AuthenticationView when not logged in
-                    <AuthenticationView
-                        username={username}
-                        setUsername={setUsername}
-                        password={password}
-                        setPassword={setPassword}
-                        handleLogin={handleLogin}
-                        loginLoading={loginLoading}
-                        loginError={loginError}
-                        loginSuccessMessage={loginSuccessMessage}
-                        authToken={authToken}
-                    />
+                    // Render different authentication views based on currentAuthView state
+                    <>
+                        {currentAuthView === 'login' && (
+                            <AuthenticationView
+                                username={username}
+                                setUsername={setUsername}
+                                password={password}
+                                setPassword={setPassword}
+                                handleLogin={handleLogin}
+                                loginLoading={loginLoading}
+                                loginError={loginError}
+                                loginSuccessMessage={loginSuccessMessage}
+                                authToken={authToken}
+                                onForgotPasswordClick={() => setCurrentAuthView('forgotPassword')} // Pass callback
+                            />
+                        )}
+
+                        {currentAuthView === 'forgotPassword' && (
+                            <ForgotPasswordView
+                                API_BASE_URL={API_BASE_URL}
+                                onBackToLogin={() => setCurrentAuthView('login')} // Pass callback
+                                onResetPasswordSuccess={() => setCurrentAuthView('resetPassword')} // Allow direct transition to reset form after token request
+                            />
+                        )}
+
+                        {currentAuthView === 'resetPassword' && (
+                            <ResetPasswordView
+                                API_BASE_URL={API_BASE_URL}
+                                onBackToLogin={() => setCurrentAuthView('login')} // Pass callback
+                            />
+                        )}
+                    </>
                 ) : (
                     // Render authenticated dashboard content
                     <>
@@ -214,11 +240,9 @@ const MammogramDashboard = () => {
                 )}
 
                 <div className="mt-8 text-center text-gray-500 text-sm">
-                    <p>
-                        This application integrates authentication, mammogram upload, and patient and report management functionalities.
-                    </p>
+
                     <p className="mt-2">
-                        <strong className="text-gray-600">Important:</strong> Ensure your Spring Boot APIs are running and accessible at the configured `API_BASE_URL`.
+                        <strong className="text-gray-600">Important:</strong> This application integrates authentication, mammogram upload, and patient and report management functionalities..
                     </p>
                 </div>
             </div>

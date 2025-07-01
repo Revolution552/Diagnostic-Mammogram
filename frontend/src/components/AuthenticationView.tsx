@@ -13,11 +13,13 @@ interface AuthenticationViewProps {
     loginError: string | null;
     loginSuccessMessage: string | null;
     authToken: string | null;
+    onForgotPasswordClick: () => void; // Added: Callback to switch to forgot password view
 }
 
 const AuthenticationView: React.FC<AuthenticationViewProps> = ({
                                                                    username, setUsername, password, setPassword,
-                                                                   handleLogin, loginLoading, loginError, loginSuccessMessage, authToken
+                                                                   handleLogin, loginLoading, loginError, loginSuccessMessage, authToken,
+                                                                   onForgotPasswordClick // Destructure the new prop
                                                                }) => (
     <>
         <h1 className="text-4xl font-extrabold text-center text-gray-800 mb-8 tracking-tight">
@@ -80,12 +82,19 @@ const AuthenticationView: React.FC<AuthenticationViewProps> = ({
                     </>
                 )}
             </button>
+            <div className="text-center mt-4">
+                <button
+                    type="button" // Important: type="button" to prevent form submission
+                    onClick={onForgotPasswordClick}
+                    className="text-blue-600 hover:text-blue-800 text-sm font-semibold transition-colors duration-200"
+                >
+                    Forgot Password?
+                </button>
+            </div>
         </form>
 
-        {/* Display only error message if there's an error */}
         {loginError && <MessageDisplay type="error" message={loginError} />}
 
-        {/* Display only success message if there's a success message */}
         {loginSuccessMessage && (
             <MessageDisplay
                 type="success"

@@ -26,35 +26,6 @@ public class AuthenticationService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
 
-    public AuthenticationResponse register(RegisterRequest request) {
-        // Validate username availability
-        if (userRepository.existsByUsername(request.getUsername())) {
-            throw new UsernameExistsException(
-                    "Username '" + request.getUsername() + "' already exists");
-        }
-
-        try {
-            // Build and save user
-            var user = User.builder()
-                    .username(request.getUsername().trim())
-                    .password(passwordEncoder.encode(request.getPassword()))
-                    .role(request.getRoleAsEnum())
-                    .build();
-
-            userRepository.save(user);
-
-            // Generate JWT token
-            var jwtToken = jwtService.generateToken(user);
-            return AuthenticationResponse.builder()
-                    .token(jwtToken)
-                    .username(user.getUsername())
-                    .role(user.getRole().name())
-                    .build();
-
-        } catch (IllegalArgumentException e) {
-            throw new InvalidRoleException("Invalid role specified: " + request.getRole());
-        }
-    }
 
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
         try {

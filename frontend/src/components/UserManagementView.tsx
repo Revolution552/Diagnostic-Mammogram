@@ -11,9 +11,13 @@ interface UserManagementViewProps {
 }
 
 const UserManagementView: React.FC<UserManagementViewProps> = ({ API_BASE_URL, authToken, getAuthHeaders, USER_ROLES }) => {
+    // Updated newUser state to match RegisterRequest DTO
     const [newUser, setNewUser] = useState({
-        username: '', password: '', firstName: '',
-        lastName: '', email: '', role: 'PATIENT'
+        fullName: '', // Changed from firstName and lastName
+        username: '',
+        password: '',
+        email: '',
+        role: 'PATIENT'
     });
     const [users, setUsers] = useState<any[]>([]);
     const [userFilterRole, setUserFilterRole] = useState<string>('ALL');
@@ -114,21 +118,26 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ API_BASE_URL, a
         setUserSuccessMessage(null);
         setUsernameSuggestions([]);
 
+        // The newUser state now directly matches the RegisterRequest DTO
+        // so we can send it as is.
+        const requestBody = { ...newUser };
+
         try {
-            const response = await fetch(`${API_BASE_URL}/api/users/register`, {
+            const response = await fetch(`${API_BASE_URL}/api/users/register`, { // Assuming /api/auth/register for user registration
                 method: 'POST',
                 headers: getAuthHeaders(),
-                body: JSON.stringify(newUser),
+                body: JSON.stringify(requestBody),
             });
 
             const data = await response.json();
 
+            // Aligning with your backend's AuthenticationController response structure
             if (response.ok && data.status === 'success') {
                 setUserSuccessMessage(data.message || 'User registered successfully!');
-                await fetchUsers();
-                setNewUser({
-                    username: '', password: '', firstName: '',
-                    lastName: '', email: '', role: 'PATIENT'
+                await fetchUsers(); // Refresh user list
+                setNewUser({ // Reset form fields
+                    fullName: '', username: '', password: '',
+                    email: '', role: 'PATIENT'
                 });
             } else {
                 if (data.status === 'conflict' && data.suggestions) {
@@ -212,6 +221,12 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ API_BASE_URL, a
             <div>
                 <h2 className="text-2xl font-bold text-gray-800 mb-4">Register New User</h2>
                 <form onSubmit={handleRegisterUser} className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-6 rounded-lg shadow-inner">
+                    <div className="md:col-span-2"> {/* Full name takes full width */}
+                        <label htmlFor="fullName" className="block text-gray-700 text-sm font-semibold mb-1">Full Name:</label>
+                        <input type="text" id="fullName" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-400 focus:border-blue-400"
+                               value={newUser.fullName} onChange={(e) => setNewUser({ ...newUser, fullName: e.target.value })} required
+                               placeholder="e.g., John Doe" />
+                    </div>
                     <div>
                         <label htmlFor="newUsername" className="block text-gray-700 text-sm font-semibold mb-1">Username:</label>
                         <input type="text" id="newUsername" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-400 focus:border-blue-400"
@@ -221,16 +236,6 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ API_BASE_URL, a
                         <label htmlFor="newPassword" className="block text-gray-700 text-sm font-semibold mb-1">Password:</label>
                         <input type="password" id="newPassword" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-400 focus:border-blue-400"
                                value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} required />
-                    </div>
-                    <div>
-                        <label htmlFor="newFirstName" className="block text-gray-700 text-sm font-semibold mb-1">First Name:</label>
-                        <input type="text" id="newFirstName" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-400 focus:border-blue-400"
-                               value={newUser.firstName} onChange={(e) => setNewUser({ ...newUser, firstName: e.target.value })} required />
-                    </div>
-                    <div>
-                        <label htmlFor="newLastName" className="block text-gray-700 text-sm font-semibold mb-1">Last Name:</label>
-                        <input type="text" id="newLastName" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-400 focus:border-blue-400"
-                               value={newUser.lastName} onChange={(e) => setNewUser({ ...newUser, lastName: e.target.value })} required />
                     </div>
                     <div className="md:col-span-1">
                         <label htmlFor="newEmail" className="block text-gray-700 text-sm font-semibold mb-1">Email:</label>
@@ -331,7 +336,9 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ API_BASE_URL, a
                             <thead className="bg-gray-100">
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Full Name</th> {/* Updated header */}
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th> {/* New header */}
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enabled</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -341,7 +348,9 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ API_BASE_URL, a
                             {users.map((user: any) => (
                                 <tr key={user.id}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.id}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.fullName}</td> {/* Display fullName */}
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.username}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.email}</td> {/* Display email */}
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                         <select
                                             value={user.role}

@@ -1,6 +1,8 @@
 package com.diagnostic.mammogram.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -26,7 +28,13 @@ public class User implements UserDetails {
     private Long id;
 
     @Column(nullable = false)
+    private String fullName;
+
+    @Column(nullable = false)
     private String username;
+
+    @Column(nullable = false, unique = true, length = 320)
+    private String email;
 
     @Column(nullable = false)
     private String password;

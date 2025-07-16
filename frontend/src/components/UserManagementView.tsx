@@ -17,7 +17,7 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ API_BASE_URL, a
         username: '',
         password: '',
         email: '',
-        role: 'PATIENT'
+        role: 'DOCTOR'
     });
     const [users, setUsers] = useState<any[]>([]);
     const [userFilterRole, setUserFilterRole] = useState<string>('ALL');
@@ -137,7 +137,7 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ API_BASE_URL, a
                 await fetchUsers(); // Refresh user list
                 setNewUser({ // Reset form fields
                     fullName: '', username: '', password: '',
-                    email: '', role: 'PATIENT'
+                    email: '', role: 'DOCTOR'
                 });
             } else {
                 if (data.status === 'conflict' && data.suggestions) {

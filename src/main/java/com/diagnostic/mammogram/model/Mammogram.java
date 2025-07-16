@@ -31,12 +31,18 @@ public class Mammogram {
     @Column(nullable = false) // Date uploaded, must be present
     private LocalDateTime dateUploaded; // Timestamp when the mammogram was uploaded
 
+    @Column(length = 1000)
     @Lob // Used for large text fields
     private String notes; // Any additional notes or initial observations
-
-    private String result;
 
     @CreationTimestamp // This typically marks the field as the creation timestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime uploadDate;
+
+    // NEW: One-to-one relationship with AIDiagnosisResult
+    // mappedBy indicates that the 'mammogram' field in AIDiagnosisResult is the owning side.
+    // CascadeType.ALL means if a Mammogram is deleted, its associated AIDiagnosisResult is also deleted.
+    // orphanRemoval = true ensures that if the link is removed, the child entity is also removed.
+    @OneToOne(mappedBy = "mammogram", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private AIDiagnosisResult aiDiagnosisResult; // Store the AI diagnosis result here
 }

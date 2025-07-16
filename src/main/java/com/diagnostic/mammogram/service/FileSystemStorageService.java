@@ -60,7 +60,8 @@ public class FileSystemStorageService implements ImageStorageService {
      *
      * @param file The {@link MultipartFile} received from the client.
      * @param subFolder An optional sub-folder path (e.g., "mammograms/patientId") to organize files.
-     * @return The full URL where the stored file can be accessed, or its relative path if no base URL is configured.
+     * @return The relative path from the rootLocation (e.g., "mammograms/1/filename.png").
+     * This path is intended for storage in the database.
      * @throws ImageStorageException if the file cannot be stored due to I/O errors.
      */
     @Override
@@ -103,13 +104,9 @@ public class FileSystemStorageService implements ImageStorageService {
             Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
             log.info("Stored file: {} in directory: {}", uniqueFileName, targetDirectory);
 
-            // Return the relative path from the rootLocation, or full URL if staticImageBaseUrl is set
+            // Always return the relative path from the rootLocation for database storage
             String relativePath = this.rootLocation.relativize(targetLocation).toString().replace("\\", "/"); // Normalize slashes for URL
-            if (StringUtils.hasText(staticImageBaseUrl)) {
-                return staticImageBaseUrl + relativePath;
-            } else {
-                return relativePath;
-            }
+            return relativePath;
 
         } catch (IOException ex) {
             throw new ImageStorageException("Failed to store file " + originalFilename + ". " + ex.getMessage(), ex);
@@ -144,27 +141,27 @@ public class FileSystemStorageService implements ImageStorageService {
     /**
      * Deletes a specified file from the storage location.
      *
-     * @param filePath The unique path/URL of the file to delete (expected to be relative path or full URL matching stored path).
+     * @param absoluteFilePath The absolute file system path of the file to delete.
      * @throws ImageStorageException if the file cannot be deleted.
      */
     @Override
-    public void deleteFile(String filePath) {
-        // If staticImageBaseUrl is present in filePath, remove it to get the relative path
-        String pathRelativeToRoot = filePath;
-        if (StringUtils.hasText(staticImageBaseUrl) && filePath.startsWith(staticImageBaseUrl)) {
-            pathRelativeToRoot = filePath.substring(staticImageBaseUrl.length());
+    public void deleteFile(String absoluteFilePath) {
+        Path fileToDelete = Paths.get(absoluteFilePath).normalize(); // Normalize the incoming absolute path
+
+        // Ensure the path is within the rootLocation to prevent directory traversal attacks during deletion
+        if (!fileToDelete.startsWith(rootLocation)) {
+            throw new ImageStorageException("Attempted to delete file outside of storage root: " + absoluteFilePath);
         }
 
-        Path fileToDelete = resolvePath(pathRelativeToRoot);
         try {
             if (Files.exists(fileToDelete) && Files.isRegularFile(fileToDelete)) {
                 Files.delete(fileToDelete);
-                log.info("Deleted file: {}", filePath);
+                log.info("Deleted file: {}", absoluteFilePath);
             } else {
-                log.warn("Attempted to delete non-existent or non-file path: {}", filePath);
+                log.warn("Attempted to delete non-existent or non-file path: {}", absoluteFilePath);
             }
         } catch (IOException e) {
-            throw new ImageStorageException("Could not delete file: " + filePath, e);
+            throw new ImageStorageException("Could not delete file: " + absoluteFilePath, e);
         }
     }
 
@@ -206,5 +203,36 @@ public class FileSystemStorageService implements ImageStorageService {
             throw new ImageStorageException("Attempted to access file outside of storage root: " + filename);
         }
         return resolvedPath;
+    }
+
+    /**
+     * Returns the absolute file system path for a given relative path.
+     * This is intended for internal use by services that need direct file system access.
+     *
+     * @param relativePath The path of the file relative to the storage root (e.g., "mammograms/1/filename.png").
+     * @return The absolute file system path (e.g., "C:\ uploads\mammograms\1\filename.png").
+     * @throws ImageStorageException if the resolved path is outside the storage root.
+     */
+    @Override
+    public String getAbsoluteFilePath(String relativePath) {
+        return resolvePath(relativePath).toAbsolutePath().toString();
+    }
+
+    /**
+     * Returns the public URL for a given relative path.
+     * This is intended for use by the frontend or other external clients.
+     *
+     * @param relativePath The path of the file relative to the storage root (e.g., "mammograms/1/filename.png").
+     * @return The full URL (e.g., "http://localhost:8080/images/mammograms/1/filename.png") or the relative path if no base URL is configured.
+     */
+    @Override
+    public String getFileUrl(String relativePath) {
+        if (StringUtils.hasText(staticImageBaseUrl)) {
+            // Ensure staticImageBaseUrl ends with a slash and relativePath doesn't start with one
+            String baseUrl = staticImageBaseUrl.endsWith("/") ? staticImageBaseUrl : staticImageBaseUrl + "/";
+            String path = relativePath.startsWith("/") ? relativePath.substring(1) : relativePath;
+            return baseUrl + path;
+        }
+        return relativePath; // If no base URL, return relative path (useful for internal references)
     }
 }

@@ -11,7 +11,13 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration; // For timeout configuration
+import java.io.IOException; // Added for file operations
+import java.nio.file.Files; // Added for file operations
+import java.nio.file.Paths; // Added for file operations
+import java.time.Duration;
+import java.util.Base64; // Added for Base64 encoding
+import java.util.HashMap; // Added for building JSON map
+import java.util.Map; // Added for building JSON map
 
 /**
  * Concrete implementation of the AIIntegrationService using WebClient
@@ -28,12 +34,12 @@ public class AIIntegrationServiceImpl implements AIIntegrationService {
     private String aiServiceBaseUrl;
 
     // Inject AI analysis endpoint from application.properties
-    @Value("${ai.service.analyze-endpoint:/analyze-mammogram}")
+    // Ensure this property is set to /predict in application.properties or application.yml
+    // If not set, it will default to /predict
+    @Value("${ai.service.analyze-endpoint:/predict}")
     private String aiServiceAnalyzeEndpoint;
 
     public AIIntegrationServiceImpl(WebClient.Builder webClientBuilder) {
-        // Build WebClient. Consider using .baseUrl(aiServiceBaseUrl) here if it's constant
-        // for all calls to this AI service. For flexibility, we'll set it per call.
         this.webClient = webClientBuilder.build();
     }
 
@@ -41,35 +47,42 @@ public class AIIntegrationServiceImpl implements AIIntegrationService {
     public AIDiagnosis analyzeMammogram(String imagePath) throws AIServiceException {
         // Construct the full URL for the AI analysis endpoint
         String fullUrl = aiServiceBaseUrl + aiServiceAnalyzeEndpoint;
-        log.info("Sending mammogram image path to AI service: {} at {}", imagePath, fullUrl);
 
-        // Define the request body for the AI service.
-        // This is a simple JSON object, you might need a more complex DTO based on your AI API.
-        // For example: { "imageUrl": "...", "patientId": "..." }
-        String requestBody = String.format("{\"imagePath\": \"%s\"}", imagePath);
+        // --- FIX 1: Read image file and convert to Base64 ---
+        String base64Image;
+        try {
+            byte[] imageBytes = Files.readAllBytes(Paths.get(imagePath));
+            base64Image = Base64.getEncoder().encodeToString(imageBytes);
+            log.info("Successfully read image from path: {} and converted to Base64.", imagePath);
+        } catch (IOException e) {
+            log.error("Error reading image file from path: {}. Details: {}", imagePath, e.getMessage(), e);
+            throw new AIServiceException("Failed to read image file for AI analysis: " + e.getMessage(), e);
+        }
+
+        // --- FIX 2: Define the request body to send Base64 image under "image" key ---
+        Map<String, String> requestBodyMap = new HashMap<>();
+        requestBodyMap.put("image", base64Image); // Key must be "image" as expected by Python Flask app
+
+        log.info("Sending mammogram image (Base64) to AI service at: {}", fullUrl);
 
         try {
             // Perform the HTTP POST request to the AI service
             AIDiagnosis aiDiagnosis = webClient.post()
                     .uri(fullUrl)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(requestBody)
+                    .bodyValue(requestBodyMap) // Send the map as JSON
                     .retrieve() // Start retrieving response
-                    // Fix 1: Use lambda for HttpStatus methods
                     .onStatus(status -> status.is4xxClientError(), response -> {
                         log.error("AI service client error: {}", response.statusCode());
-                        // Fix 2: Map to AIServiceException and then flatMap to Mono.error
                         return response.bodyToMono(String.class)
                                 .map(body -> new AIServiceException("AI Service Client Error (" + response.statusCode() + "): " + body))
-                                .flatMap(Mono::error); // This explicitly converts to Mono<? extends Throwable>
+                                .flatMap(Mono::error);
                     })
-                    // Fix 1: Use lambda for HttpStatus methods
                     .onStatus(status -> status.is5xxServerError(), response -> {
                         log.error("AI service server error: {}", response.statusCode());
-                        // Fix 2: Map to AIServiceException and then flatMap to Mono.error
                         return response.bodyToMono(String.class)
                                 .map(body -> new AIServiceException("AI Service Server Error (" + response.statusCode() + "): " + body))
-                                .flatMap(Mono::error); // This explicitly converts to Mono<? extends Throwable>
+                                .flatMap(Mono::error);
                     })
                     .bodyToMono(AIDiagnosis.class) // Convert response body to AIDiagnosis DTO
                     .timeout(Duration.ofSeconds(60)) // Set a timeout for the AI analysis
@@ -84,7 +97,6 @@ public class AIIntegrationServiceImpl implements AIIntegrationService {
             return aiDiagnosis;
 
         } catch (WebClientResponseException e) {
-            // This catch block handles exceptions where WebClient already threw a specific error (e.g., non-2xx status not handled by onStatus)
             log.error("WebClient error during AI analysis for imagePath {}: {} - {}", imagePath, e.getStatusCode(), e.getResponseBodyAsString(), e);
             throw new AIServiceException("Failed to get AI diagnosis due to WebClient error: " + e.getResponseBodyAsString(), e);
         } catch (AIServiceException e) {

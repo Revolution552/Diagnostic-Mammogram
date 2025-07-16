@@ -95,7 +95,7 @@ const MammogramDashboard = () => {
             }
         } catch (err: any) {
             console.error('Error during authentication:', err);
-            setLoginError('Network error or an unexpected issue occurred during login. Please check your API_BASE_URL and network connection.');
+            setLoginError('Network error or an unexpected issue occurred during login. Please check your network connection.');
         } finally {
             setLoginLoading(false);
         }
@@ -233,7 +233,7 @@ const MammogramDashboard = () => {
                                 API_BASE_URL={API_BASE_URL}
                                 authToken={authToken}
                                 getAuthHeaders={getAuthHeaders}
-                                USER_ROLES={['ADMIN', 'DOCTOR', 'RADIOLOGIST', 'PATIENT']} // Pass roles constant
+                                USER_ROLES={['ADMIN', 'DOCTOR', 'RADIOLOGIST']} // Pass roles constant
                             />
                         )}
                     </>

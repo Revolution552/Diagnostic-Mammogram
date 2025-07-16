@@ -15,7 +15,7 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
         patientId: '',
         findings: '',
         conclusion: '',
-        recommendations: '',
+        recommendation: '',
         reportDate: new Date().toISOString().split('T')[0],
         createdByUserId: ''
     });
@@ -62,7 +62,7 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
             setReportError('Conclusion cannot be empty.');
             return;
         }
-        if (!newReport.recommendations.trim()) {
+        if (!newReport.recommendation.trim()) {
             setReportError('Recommendations cannot be empty.');
             return;
         }
@@ -78,7 +78,7 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
             createdByUserId: newReport.createdByUserId ? Number(newReport.createdByUserId) : undefined,
             findings: newReport.findings.trim(),
             conclusion: newReport.conclusion.trim(),
-            recommendations: newReport.recommendations.trim(),
+            recommendations: newReport.recommendation.trim(),
         };
 
         try {
@@ -96,7 +96,7 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
                 setNewReport({
                     mammogramId: '', patientId: '',
                     findings: '', conclusion: '',
-                    recommendations: '', reportDate: new Date().toISOString().split('T')[0], createdByUserId: ''
+                    recommendation: '', reportDate: new Date().toISOString().split('T')[0], createdByUserId: ''
                 });
             } else {
                 if (data.errors && Array.isArray(data.errors) && data.errors.length > 0) {
@@ -184,7 +184,7 @@ const ReportManagementView: React.FC<ReportManagementViewProps> = ({ API_BASE_UR
                     <div className="md:col-span-2">
                         <label htmlFor="recommendations" className="block text-gray-700 text-sm font-semibold mb-1">Recommendations:</label>
                         <textarea id="recommendations" rows="3" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-400 focus:border-blue-400"
-                                  value={newReport.recommendations} onChange={(e) => setNewReport({ ...newReport, recommendations: e.target.value })} required></textarea>
+                                  value={newReport.recommendation} onChange={(e) => setNewReport({ ...newReport, recommendation: e.target.value })} required></textarea>
                     </div>
                     <div>
                         <label htmlFor="reportDate" className="block text-gray-700 text-sm font-semibold mb-1">Report Date:</label>

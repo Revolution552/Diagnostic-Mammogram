@@ -10,7 +10,6 @@ import java.nio.file.Path;
  */
 public interface ImageStorageService {
 
-    // Removed: void init();
     // The initialization logic is now handled in the constructor of concrete implementations
     // like FileSystemStorageService, typically based on injected properties.
 
@@ -19,7 +18,7 @@ public interface ImageStorageService {
      *
      * @param file The MultipartFile received from the client.
      * @param subFolder An optional sub-folder path (e.g., "mammograms/patientId") to organize files.
-     * @return The unique path/URL of the stored file.
+     * @return The unique relative path of the stored file (e.g., "mammograms/1/filename.png").
      * @throws ImageStorageException if the file cannot be stored.
      */
     String storeFile(MultipartFile file, String subFolder);
@@ -27,7 +26,7 @@ public interface ImageStorageService {
     /**
      * Loads a stored file as a Spring Resource.
      *
-     * @param fileName The unique path/name of the file to load.
+     * @param fileName The unique path/name of the file (relative to the storage root) to load.
      * @return A Spring Resource representing the file.
      * @throws ImageStorageException if the file cannot be found or accessed.
      */
@@ -36,10 +35,10 @@ public interface ImageStorageService {
     /**
      * Deletes a file from the configured storage location.
      *
-     * @param filePath The unique path/URL of the file to delete.
+     * @param absoluteFilePath The absolute file system path of the file to delete.
      * @throws ImageStorageException if the file cannot be deleted.
      */
-    void deleteFile(String filePath);
+    void deleteFile(String absoluteFilePath);
 
     /**
      * Deletes all files and sub-directories from the root storage location.
@@ -48,10 +47,29 @@ public interface ImageStorageService {
     void deleteAll();
 
     /**
-     * Resolves the Path for a given file name within the storage root.
+     * Resolves the Path for a given file name (expected to be relative to the storage root)
+     * into an absolute {@link Path} within the storage root.
      *
-     * @param filename The name of the file.
-     * @return The absolute Path to the file.
+     * @param filename The relative path/name of the file.
+     * @return The absolute {@link Path} to the file.
      */
     Path resolvePath(String filename);
+
+    /**
+     * Returns the absolute file system path for a given relative path.
+     * This is intended for internal use by services that need direct file system access.
+     *
+     * @param relativePath The path of the file relative to the storage root (e.g., "mammograms/1/filename.png").
+     * @return The absolute file system path (e.g., "C:\ uploads\mammograms\1\filename.png").
+     */
+    String getAbsoluteFilePath(String relativePath);
+
+    /**
+     * Returns the public URL for a given relative path.
+     * This is intended for use by the frontend or other external clients.
+     *
+     * @param relativePath The path of the file relative to the storage root (e.g., "mammograms/1/filename.png").
+     * @return The full URL (e.g., "http://localhost:8080/images/mammograms/1/filename.png") or the relative path if no base URL is configured.
+     */
+    String getFileUrl(String relativePath);
 }

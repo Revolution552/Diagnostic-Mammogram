@@ -77,24 +77,24 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
      */
     List<Patient> findByCreatedAtBefore(LocalDateTime date);
 
-    // Mammogram result queries
+    // Mammogram AI prediction queries
     /**
-     * Finds distinct patients who have at least one mammogram with a specific result.
-     * This query explicitly joins with mammograms and filters by the result, then orders by patient full name.
-     * @param result The mammogram result to filter by (e.g., "Benign", "Malignant").
-     * @return A list of distinct patients with matching mammogram results.
+     * Finds distinct patients who have at least one mammogram with a specific AI prediction.
+     * This query explicitly joins with mammograms and filters by the AI diagnosis prediction.
+     * @param aiPrediction The AI prediction to filter by (e.g., "NORMAL", "ABNORMAL").
+     * @return A list of distinct patients with matching AI mammogram predictions.
      */
-    @Query("SELECT DISTINCT p FROM Patient p JOIN p.mammograms m WHERE m.result = :result ORDER BY p.fullName")
-    List<Patient> findByMammograms_Result(@Param("result") String result);
+    @Query("SELECT DISTINCT p FROM Patient p JOIN p.mammograms m JOIN m.aiDiagnosisResult ar WHERE ar.prediction = :aiPrediction ORDER BY p.fullName")
+    List<Patient> findByMammograms_AiDiagnosisResult_Prediction(@Param("aiPrediction") String aiPrediction);
 
     /**
-     * Finds patients who have at least one mammogram with a specific result using EXISTS subquery.
+     * Finds patients who have at least one mammogram with a specific AI prediction using EXISTS subquery.
      * This is an alternative to JOIN for checking existence.
-     * @param result The mammogram result to check for.
-     * @return A list of patients with at least one mammogram matching the result.
+     * @param aiPrediction The AI prediction to check for.
+     * @return A list of patients with at least one mammogram matching the AI prediction.
      */
-    @Query("SELECT p FROM Patient p WHERE EXISTS (SELECT 1 FROM p.mammograms m WHERE m.result = :result)")
-    List<Patient> findPatientsWithAtLeastOneMammogramResult(@Param("result") String result);
+    @Query("SELECT p FROM Patient p WHERE EXISTS (SELECT 1 FROM p.mammograms m JOIN m.aiDiagnosisResult ar WHERE ar.prediction = :aiPrediction)")
+    List<Patient> findPatientsWithAtLeastOneMammogramResult(@Param("aiPrediction") String aiPrediction);
 
     // Projection queries
     /**
@@ -118,34 +118,35 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
      * @return A list of patients matching the specified criteria.
      */
     @Query("SELECT p FROM Patient p WHERE " +
-            "(:fullName IS NULL OR p.fullName LIKE %:fullName%) AND " + // Corrected parameter name from :name to :fullName
+            "(:fullName IS NULL OR p.fullName LIKE %:fullName%) AND " +
             "(:minAge IS NULL OR p.age >= :minAge) AND " +
             "(:maxAge IS NULL OR p.age <= :maxAge) AND " +
             "(:gender IS NULL OR p.gender = :gender)")
     List<Patient> advancedSearch(
-            @Param("fullName") String fullName, // Renamed from 'name' to 'fullName' to match @Query param
+            @Param("fullName") String fullName,
             @Param("minAge") Integer minAge,
             @Param("maxAge") Integer maxAge,
             @Param("gender") String gender);
 
     // Native queries for complex operations (using SQL directly)
     /**
-     * Finds patients based on a mammogram result and the mammogram's upload date range using a native SQL query.
+     * Finds patients based on a mammogram's AI prediction and the mammogram's upload date range using a native SQL query.
      * This query is database-specific SQL.
-     * @param result The mammogram result.
+     * @param aiPrediction The AI prediction (e.g., "NORMAL", "ABNORMAL").
      * @param startDate The start date for mammogram upload.
      * @param endDate The end date for mammogram upload.
      * @return A list of patients matching the criteria via native query.
      */
     @Query(value = """
-           SELECT p.* FROM patients p
+           SELECT DISTINCT p.* FROM patients p
            JOIN mammograms m ON p.id = m.patient_id
-           WHERE m.result = :result
-           AND m.upload_date BETWEEN :startDate AND :endDate
-           ORDER BY p.full_name -- Assuming 'full_name' is the column name in the 'patients' table
+           JOIN ai_diagnosis_results adr ON m.id = adr.mammogram_id -- Join to the new AI results table
+           WHERE adr.prediction = :aiPrediction -- Filter by the prediction from AI_DIAGNOSIS_RESULTS
+           AND m.date_uploaded BETWEEN :startDate AND :endDate -- Filter by mammogram upload date
+           ORDER BY p.full_name
            """, nativeQuery = true)
-    List<Patient> findByMammogramResultAndDateRange(
-            @Param("result") String result,
+    List<Patient> findByMammogramPredictionAndDateRange(
+            @Param("aiPrediction") String aiPrediction, // Renamed parameter to match new logic
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate);
 

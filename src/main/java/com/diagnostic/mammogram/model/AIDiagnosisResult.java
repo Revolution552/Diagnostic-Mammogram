@@ -5,9 +5,12 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.databind.ObjectMapper; // Import ObjectMapper
+import com.fasterxml.jackson.core.type.TypeReference; // Import TypeReference
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Collections; // Import Collections for emptyList
 
 @Entity
 @Table(name = "ai_diagnosis_results")
@@ -21,8 +24,10 @@ public class AIDiagnosisResult {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // One-to-one relationship with Mammogram
-    // A Mammogram can have one AI diagnosis result, and an AI diagnosis result belongs to one Mammogram.
+    // NEW: Direct patient ID for easier access/querying, though redundant with mammogram.patient.id
+    @Column(nullable = false) // Assuming patientId should always be present
+    private Long patientId;
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "mammogram_id", referencedColumnName = "id", nullable = false, unique = true)
     private Mammogram mammogram;
@@ -30,11 +35,7 @@ public class AIDiagnosisResult {
     @Column(nullable = false)
     private String prediction; // e.g., "NORMAL", "ABNORMAL"
 
-    // Store probabilities as a JSON string or a separate table if complex.
-    // For simplicity, we'll store it as a comma-separated string or JSON string.
-    // Using @Convert to handle List<Double> to String conversion for simplicity.
-    // You'll need to create a converter for this.
-    @Column(nullable = false, length = 500) // Increased length for JSON string
+    @Column(nullable = false, length = 500) // probabilities_json cannot be null
     private String probabilitiesJson; // Store List<Double> as JSON string
 
     @Column(nullable = false)
@@ -49,9 +50,11 @@ public class AIDiagnosisResult {
     @Column(nullable = false)
     private LocalDateTime analysisDate; // When the AI analysis was performed
 
-    // Transient field for easy access to List<Double>
     @Transient
-    private List<Double> probabilitiesList;
+    private List<Double> probabilitiesList; // Transient field for easy List<Double> access
+
+    // ObjectMapper instance for JSON conversions
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     // --- Lifecycle Callbacks for probabilitiesList conversion ---
     @PostLoad
@@ -59,36 +62,32 @@ public class AIDiagnosisResult {
     @PostUpdate
     private void convertProbabilitiesJsonToList() {
         if (this.probabilitiesJson != null && !this.probabilitiesJson.isEmpty()) {
-            // Using Jackson for JSON conversion. Ensure you have Jackson dependencies.
-            // <dependency>
-            //    <groupId>com.fasterxml.jackson.core</groupId>
-            //    <artifactId>jackson-databind</artifactId>
-            // </dependency>
             try {
-                this.probabilitiesList = new com.fasterxml.jackson.databind.ObjectMapper().readValue(this.probabilitiesJson, new com.fasterxml.jackson.core.type.TypeReference<List<Double>>() {});
+                this.probabilitiesList = objectMapper.readValue(this.probabilitiesJson, new TypeReference<List<Double>>() {});
             } catch (Exception e) {
-                // Log error
                 System.err.println("Error converting probabilities JSON to List: " + e.getMessage());
-                this.probabilitiesList = null;
+                this.probabilitiesList = Collections.emptyList(); // Set to empty list on error
             }
         } else {
-            this.probabilitiesList = null;
+            this.probabilitiesList = Collections.emptyList(); // Set to empty list if JSON is null/empty
         }
     }
 
     @PrePersist
     @PreUpdate
     private void convertProbabilitiesListToJson() {
-        if (this.probabilitiesList != null && !this.probabilitiesList.isEmpty()) {
+        if (this.probabilitiesList != null) { // Check if list itself is not null
             try {
-                this.probabilitiesJson = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(this.probabilitiesList);
+                // Convert to JSON string. If list is empty, it will be "[]"
+                this.probabilitiesJson = objectMapper.writeValueAsString(this.probabilitiesList);
             } catch (Exception e) {
-                // Log error
                 System.err.println("Error converting probabilities List to JSON: " + e.getMessage());
-                this.probabilitiesJson = null;
+                // If conversion fails, set to an empty JSON array string instead of null
+                this.probabilitiesJson = "[]";
             }
         } else {
-            this.probabilitiesJson = null;
+            // If probabilitiesList is null, store an empty JSON array string to satisfy NOT NULL constraint
+            this.probabilitiesJson = "[]";
         }
     }
 }

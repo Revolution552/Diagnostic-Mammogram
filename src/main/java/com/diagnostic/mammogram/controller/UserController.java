@@ -2,7 +2,8 @@ package com.diagnostic.mammogram.controller;
 
 import com.diagnostic.mammogram.dto.request.RegisterRequest;
 import com.diagnostic.mammogram.dto.request.UpdateRoleRequest;
-import com.diagnostic.mammogram.dto.response.UserResponse;
+import com.diagnostic.mammogram.dto.response.UserResponse; // Ensure this is imported
+import com.diagnostic.mammogram.exception.EmailExistsException; // NEW: Import EmailExistsException
 import com.diagnostic.mammogram.exception.UserCreationException;
 import com.diagnostic.mammogram.exception.UserNotFoundException;
 import com.diagnostic.mammogram.exception.UsernameExistsException;
@@ -21,7 +22,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/users")
@@ -31,27 +31,45 @@ public class UserController {
 
     private final UserService userService;
 
+    /**
+     * Registers a new user in the system.
+     * Accessible by anyone (no @PreAuthorize, handled by Spring Security config if public endpoint).
+     *
+     * @param request The registration request details.
+     * @return ResponseEntity indicating success or failure of registration.
+     */
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest request) {
         try {
+            // UserService.createUserFromRequest already handles exceptions and returns User entity
             User user = userService.createUserFromRequest(request);
 
             Map<String, Object> response = new HashMap<>();
             response.put("status", "success");
             response.put("message", "User registered successfully");
-            response.put("userId", user.getId());
+            response.put("userId", user.getId()); // Return ID of the created user
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
         } catch (UsernameExistsException ex) {
+            log.warn("Registration failed - username already exists: {}", ex.getUsername());
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("status", "conflict");
-            errorResponse.put("message", "Username already exists");
+            errorResponse.put("message", ex.getMessage()); // Use message from exception
             errorResponse.put("suggestions", generateUsernameSuggestions(ex.getUsername()));
 
             return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
 
+        } catch (EmailExistsException ex) { // Handle EmailExistsException
+            // FIX: Use ex.getMessage() as EmailExistsException does not have getEmail()
+            log.warn("Registration failed - email already exists: {}", ex.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "conflict");
+            errorResponse.put("message", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+
         } catch (UserCreationException ex) {
+            log.error("User creation failed: {}", ex.getMessage(), ex);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of(
                             "status", "error",
@@ -60,6 +78,11 @@ public class UserController {
         }
     }
 
+    /**
+     * Generates a list of username suggestions based on a conflicting username.
+     * @param username The username that caused a conflict.
+     * @return A list of suggested usernames.
+     */
     private List<String> generateUsernameSuggestions(String username) {
         return List.of(
                 username + "123",
@@ -69,6 +92,13 @@ public class UserController {
         );
     }
 
+    /**
+     * Retrieves a user by their ID.
+     * Accessible by ADMIN or the user themselves.
+     *
+     * @param userId The ID of the user to retrieve.
+     * @return ResponseEntity with user details.
+     */
     @GetMapping("/{userId}")
     @PreAuthorize("hasRole('ADMIN') or @userSecurity.isSelf(authentication, #userId)")
     public ResponseEntity<Map<String, Object>> getUser(@PathVariable Long userId) {
@@ -78,8 +108,8 @@ public class UserController {
         try {
             log.debug("Fetching user details for ID: {}", userId);
 
-            // Fetch user (will throw UserNotFoundException if not found)
-            UserResponse userResponse = toUserResponse(userService.getUserById(userId));
+            // UserService.getUserById now returns UserResponse directly
+            UserResponse userResponse = userService.getUserById(userId);
 
             // Successful response
             response.put("success", true);
@@ -90,21 +120,18 @@ public class UserController {
             return ResponseEntity.ok(response);
 
         } catch (UserNotFoundException ex) {
-            // Specific handling for "not found" cases
             log.warn("User not found with ID {}: {}", userId, ex.getMessage());
             response.put("success", false);
-            response.put("message", "User not found with ID: " + userId);
+            response.put("message", ex.getMessage()); // Use message from exception
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
 
         } catch (AccessDeniedException ex) {
-            // Handle authorization failures separately
             log.warn("Access denied for user ID {}: {}", userId, ex.getMessage());
             response.put("success", false);
             response.put("message", "Access denied");
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
 
         } catch (Exception ex) {
-            // Catch-all for other unexpected errors
             log.error("Unexpected error fetching user ID {}: {}", userId, ex.getMessage(), ex);
             response.put("success", false);
             response.put("message", "Internal server error");
@@ -112,6 +139,13 @@ public class UserController {
         }
     }
 
+    /**
+     * Retrieves a user by their username.
+     * Accessible by ADMIN.
+     *
+     * @param username The username to search for.
+     * @return ResponseEntity with user details.
+     */
     @GetMapping("/username/{username}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> getUserByUsername(
@@ -124,13 +158,10 @@ public class UserController {
         try {
             log.debug("Admin searching for user: {}", username);
 
-            // Trim and case-normalize the username
             String normalizedUsername = username.trim().toLowerCase();
 
-            // Fetch user (throws UserNotFoundException if not found)
-            UserResponse user = toUserResponse(
-                    userService.getUserByUsername(normalizedUsername)
-            );
+            // UserService.getUserByUsername now returns UserResponse directly
+            UserResponse user = userService.getUserByUsername(normalizedUsername);
 
             response.put("success", true);
             response.put("message", "User found");
@@ -142,7 +173,7 @@ public class UserController {
         } catch (UserNotFoundException ex) {
             log.warn("User not found: {}", username);
             response.put("success", false);
-            response.put("message", "User not found with username: " + username);
+            response.put("message", ex.getMessage()); // Use message from exception
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
 
         } catch (Exception ex) {
@@ -153,11 +184,19 @@ public class UserController {
         }
     }
 
+    /**
+     * Updates the role of a user.
+     * Accessible by ADMIN.
+     *
+     * @param userId The ID of the user to update.
+     * @param request The request containing the new role.
+     * @return ResponseEntity with the updated user details.
+     */
     @PutMapping("/{userId}/role")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> updateUserRole(
             @PathVariable Long userId,
-            @RequestBody UpdateRoleRequest request) {
+            @Valid @RequestBody UpdateRoleRequest request) { // Add @Valid for DTO validation
 
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", System.currentTimeMillis());
@@ -165,8 +204,8 @@ public class UserController {
         try {
             log.info("Updating role for user ID: {} to role: {}", userId, request.getRole());
 
-            // This will throw UserNotFoundException if user doesn't exist
-            UserResponse userResponse = toUserResponse(userService.updateUserRole(userId, request.getRole()));
+            // UserService.updateUserRole now returns UserResponse directly
+            UserResponse userResponse = userService.updateUserRole(userId, request.getRole());
 
             response.put("success", true);
             response.put("message", "User role updated successfully");
@@ -177,13 +216,13 @@ public class UserController {
         } catch (UserNotFoundException ex) {
             log.warn("User not found with ID {}: {}", userId, ex.getMessage());
             response.put("success", false);
-            response.put("message", "User not found with ID: " + userId);
+            response.put("message", ex.getMessage()); // Use message from exception
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
 
         } catch (IllegalArgumentException ex) {
             log.warn("Invalid role assignment for user ID {}: {}", userId, ex.getMessage());
             response.put("success", false);
-            response.put("message", "Invalid role: " + request.getRole());
+            response.put("message", ex.getMessage()); // Use message from exception
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
 
         } catch (Exception ex) {
@@ -194,6 +233,13 @@ public class UserController {
         }
     }
 
+    /**
+     * Retrieves a list of users filtered by role.
+     * Accessible by ADMIN.
+     *
+     * @param roleInput The role string to filter by.
+     * @return ResponseEntity with a list of users.
+     */
     @GetMapping("/role/{role}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> getUsersByRole(
@@ -204,14 +250,12 @@ public class UserController {
         response.put("requestedRole", roleInput);
 
         try {
-            // 1. Validate and convert role
             User.Role role = validateRole(roleInput);
             log.debug("Fetching users with role: {}", role);
 
-            // 2. Fetch users
-            List<UserResponse> users = fetchUsersByRole(role);
+            // UserService.getUsersByRole now returns List<UserResponse> directly
+            List<UserResponse> users = userService.getUsersByRole(role);
 
-            // 3. Build success response
             return buildSuccessResponse(role, users);
 
         } catch (IllegalArgumentException ex) {
@@ -221,7 +265,7 @@ public class UserController {
         }
     }
 
-    // Helper Methods
+    // Helper Methods for getUsersByRole
     private User.Role validateRole(String roleInput) {
         try {
             return User.Role.fromString(roleInput);
@@ -229,13 +273,6 @@ public class UserController {
             log.warn("Invalid role conversion attempt: {}", roleInput);
             throw ex;
         }
-    }
-
-    private List<UserResponse> fetchUsersByRole(User.Role role) {
-        return userService.getUsersByRole(role)
-                .stream()
-                .map(this::toUserResponse)
-                .toList();
     }
 
     private ResponseEntity<Map<String, Object>> buildSuccessResponse(
@@ -254,7 +291,7 @@ public class UserController {
     private ResponseEntity<Map<String, Object>> handleInvalidRole(
             Map<String, Object> response, String roleInput, IllegalArgumentException ex) {
         response.put("success", false);
-        response.put("message", "Invalid role specified: " + roleInput);
+        response.put("message", ex.getMessage()); // Use message from exception
         response.put("validRoles", Arrays.stream(User.Role.values())
                 .map(Enum::name)
                 .toList());
@@ -272,14 +309,20 @@ public class UserController {
         return ResponseEntity.internalServerError().body(response);
     }
 
+    /**
+     * Retrieves a list of all active doctors.
+     * Accessible by ADMIN.
+     *
+     * @return ResponseEntity with a list of active doctors.
+     */
     @GetMapping("/doctors/active")
+    @PreAuthorize("hasRole('ADMIN')") // Added PreAuthorize for consistency
     public ResponseEntity<Map<String, Object>> getActiveDoctors() {
         Map<String, Object> response = new HashMap<>();
         try {
             log.debug("Fetching all active doctors");
-            List<UserResponse> doctors = userService.getActiveDoctors().stream()
-                    .map(this::toUserResponse)
-                    .collect(Collectors.toList());
+            // UserService.getActiveDoctors now returns List<UserResponse> directly
+            List<UserResponse> doctors = userService.getActiveDoctors();
 
             response.put("success", true);
             response.put("message", String.format("Retrieved %d active doctors", doctors.size()));
@@ -298,6 +341,13 @@ public class UserController {
         }
     }
 
+    /**
+     * Deactivates a user account.
+     * Accessible by ADMIN.
+     *
+     * @param userId The ID of the user to deactivate.
+     * @return ResponseEntity indicating success or failure of deactivation.
+     */
     @PatchMapping("/{userId}/deactivate")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> deactivateUser(@PathVariable Long userId) {
@@ -307,22 +357,24 @@ public class UserController {
         try {
             log.info("Attempting to deactivate user ID: {}", userId);
 
-            // First verify user exists
-            User user = userService.getUserById(userId);
+            // Fetch user as UserResponse to check status, then call service
+            UserResponse userResponse = userService.getUserById(userId);
 
             // Check if already deactivated
-            if (!user.isEnabled()) {
+            if (!userResponse.isEnabled()) {
                 response.put("success", false);
                 response.put("message", "User is already deactivated");
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
             }
 
             // Proceed with deactivation
-            userService.deactivateUser(userId);
+            // userService.deactivateUser returns void, but updateUserEnabledStatus returns UserResponse
+            UserResponse updatedUser = userService.updateUserEnabledStatus(userId, false);
 
             response.put("success", true);
             response.put("message", "User deactivated successfully");
             response.put("userId", userId);
+            response.put("data", updatedUser); // Include updated user data
 
             log.info("Successfully deactivated user ID: {}", userId);
             return ResponseEntity.ok(response);
@@ -330,7 +382,7 @@ public class UserController {
         } catch (UserNotFoundException ex) {
             log.warn("Deactivation failed - user not found: ID {}", userId);
             response.put("success", false);
-            response.put("message", "User not found with ID: " + userId);
+            response.put("message", ex.getMessage()); // Use message from exception
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
 
         } catch (Exception ex) {
@@ -341,6 +393,13 @@ public class UserController {
         }
     }
 
+    /**
+     * Activates a user account.
+     * Accessible by ADMIN.
+     *
+     * @param userId The ID of the user to activate.
+     * @return ResponseEntity indicating success or failure of activation.
+     */
     @PatchMapping("/{userId}/activate")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> activateUser(@PathVariable Long userId) {
@@ -351,11 +410,11 @@ public class UserController {
         try {
             log.info("Admin attempting to activate user ID: {}", userId);
 
-            // First verify user exists
-            User user = userService.getUserById(userId);
+            // Fetch user as UserResponse to check status, then call service
+            UserResponse userResponse = userService.getUserById(userId);
 
             // Check if already active
-            if (user.isEnabled()) {
+            if (userResponse.isEnabled()) {
                 response.put("success", false);
                 response.put("message", "User is already active");
                 log.warn("Activation failed - user {} already active", userId);
@@ -363,11 +422,13 @@ public class UserController {
             }
 
             // Proceed with activation
-            userService.activateUser(userId);
+            // userService.activateUser returns void, but updateUserEnabledStatus returns UserResponse
+            UserResponse updatedUser = userService.updateUserEnabledStatus(userId, true);
 
             response.put("success", true);
             response.put("message", "User activated successfully");
             response.put("newStatus", true);
+            response.put("data", updatedUser); // Include updated user data
 
             log.info("Admin successfully activated user ID: {}", userId);
             return ResponseEntity.ok(response);
@@ -375,7 +436,7 @@ public class UserController {
         } catch (UserNotFoundException ex) {
             log.warn("Activation failed - user not found: ID {}", userId);
             response.put("success", false);
-            response.put("message", "User not found with ID: " + userId);
+            response.put("message", ex.getMessage()); // Use message from exception
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
 
         } catch (Exception ex) {
@@ -386,15 +447,21 @@ public class UserController {
         }
     }
 
+    /**
+     * Searches for users based on a query string (e.g., username).
+     * Accessible by ADMIN.
+     *
+     * @param query The search query.
+     * @return ResponseEntity with a list of matching users.
+     */
     @GetMapping("/search")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> searchUsers(@RequestParam String query) {
         Map<String, Object> response = new HashMap<>();
         try {
             log.debug("Searching users with query: {}", query);
-            List<UserResponse> users = userService.searchUsers(query).stream()
-                    .map(this::toUserResponse)
-                    .collect(Collectors.toList());
+            // UserService.searchUsers now returns List<UserResponse> directly
+            List<UserResponse> users = userService.searchUsers(query);
 
             response.put("success", true);
             response.put("message", String.format("Found %d users matching query", users.size()));
@@ -414,6 +481,12 @@ public class UserController {
         }
     }
 
+    /**
+     * Counts the number of admin users.
+     * Accessible by ADMIN.
+     *
+     * @return ResponseEntity with the count of admin users.
+     */
     @GetMapping("/count/admins")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> countAdmins() {
@@ -438,12 +511,24 @@ public class UserController {
         }
     }
 
-    private UserResponse toUserResponse(User user) {
-        return UserResponse.builder()
-                .id(user.getId())
-                .username(user.getUsername())
-                .role(user.getRole())
-                .enabled(user.isEnabled())
-                .build();
+    /**
+     * NEW: Retrieves a list of all users in the system.
+     * Accessible by ADMIN.
+     *
+     * @return ResponseEntity with a list of all UserResponse DTOs.
+     */
+    @GetMapping // This endpoint will now correctly return all users
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> getAllUsers() {
+        log.info("Received request to get all users.");
+        List<UserResponse> users = userService.getAllUsers(); // Call the service method that returns DTOs
+
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("success", true);
+        responseMap.put("message", "All users retrieved successfully.");
+        responseMap.put("data", users);
+        responseMap.put("status", HttpStatus.OK.value());
+
+        return ResponseEntity.ok(responseMap);
     }
 }

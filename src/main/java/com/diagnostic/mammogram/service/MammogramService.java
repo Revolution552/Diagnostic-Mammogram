@@ -5,25 +5,19 @@ import com.diagnostic.mammogram.dto.request.MammogramUploadRequest;
 import com.diagnostic.mammogram.dto.response.MammogramResponse;
 import com.diagnostic.mammogram.exception.AIServiceException;
 import com.diagnostic.mammogram.exception.ResourceNotFoundException;
-import com.diagnostic.mammogram.model.AIDiagnosisResult; // Corrected import to match your entity name
+import com.diagnostic.mammogram.model.AIDiagnosisResult;
 import com.diagnostic.mammogram.model.Mammogram;
 import com.diagnostic.mammogram.model.Patient;
-import com.diagnostic.mammogram.repository.AIDiagnosisResultRepository; // Corrected import to match your repository name
+import com.diagnostic.mammogram.repository.AIDiagnosisResultRepository;
+import com.diagnostic.mammogram.repository.MammogramRepository;
 import com.diagnostic.mammogram.repository.PatientRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,14 +25,11 @@ import java.util.stream.Collectors;
 @Slf4j
 public class MammogramService {
 
-    private final com.diagnostic.mammogram.repository.MammogramRepository mammogramRepository;
+    private final MammogramRepository mammogramRepository;
     private final PatientRepository patientRepository;
     private final ImageStorageService imageStorageService;
     private final AIIntegrationService aiIntegrationService;
     private final AIDiagnosisResultRepository aiDiagnosisResultRepository;
-
-    @Value("${app.upload.dir:${user.home}/uploads/mammograms}")
-    private String uploadDir;
 
     // --- Create Operation (Upload Mammogram) ---
     @Transactional
@@ -82,11 +73,12 @@ public class MammogramService {
             // Create and save AIDiagnosisResult entity
             aiDiagnosisResult = AIDiagnosisResult.builder()
                     .mammogram(mammogram) // Link to the newly saved mammogram
+                    .patientId(patient.getId())
                     .prediction(aiDiagnosisDto.getPrediction())
-                    .probabilitiesJson(convertProbabilitiesToJson(aiDiagnosisDto.getProbabilities())) // Store as JSON string
+                    .probabilitiesList(aiDiagnosisDto.getProbabilities())
                     .confidenceScore(aiDiagnosisDto.getConfidenceScore())
-                    .detailedFindings(aiDiagnosisDto.getDiagnosisSummary()) // Map diagnosisSummary to detailedFindings
-                    .recommendation(null) // Flask app doesn't provide this yet, set to null
+                    .detailedFindings(aiDiagnosisDto.getDetailedFindings()) // Use detailedFindings from DTO
+                    .recommendation(aiDiagnosisDto.getRecommendation()) // Use recommendation from DTO
                     .analysisDate(LocalDateTime.now())
                     .build();
 
@@ -105,7 +97,6 @@ public class MammogramService {
         }
 
         // 5. Map to Response DTO
-        // Pass the DTO from AI analysis, not the entity, for the response
         return mapToMammogramResponse(mammogram, aiDiagnosisDto, patient.getFullName());
     }
 
@@ -116,15 +107,16 @@ public class MammogramService {
         Mammogram mammogram = mammogramRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Mammogram not found with ID: " + id));
 
-        // Retrieve AI diagnosis result if it exists
         AIDiagnosis aiDiagnosisDto = null;
         if (mammogram.getAiDiagnosisResult() != null) {
             AIDiagnosisResult storedResult = mammogram.getAiDiagnosisResult();
             aiDiagnosisDto = AIDiagnosis.builder()
                     .prediction(storedResult.getPrediction())
-                    .probabilities(parseProbabilities(storedResult.getProbabilitiesJson()))
+                    .probabilities(storedResult.getProbabilitiesList())
                     .diagnosisSummary(storedResult.getDetailedFindings())
                     .confidenceScore(storedResult.getConfidenceScore())
+                    .detailedFindings(storedResult.getDetailedFindings())
+                    .recommendation(storedResult.getRecommendation())
                     .build();
             log.debug("Retrieved AI Diagnosis Result for mammogram ID {}: {}", id, aiDiagnosisDto.getDiagnosisSummary());
         } else {
@@ -144,9 +136,11 @@ public class MammogramService {
                         AIDiagnosisResult storedResult = mammogram.getAiDiagnosisResult();
                         aiDiagnosisDto = AIDiagnosis.builder()
                                 .prediction(storedResult.getPrediction())
-                                .probabilities(parseProbabilities(storedResult.getProbabilitiesJson()))
+                                .probabilities(storedResult.getProbabilitiesList())
                                 .diagnosisSummary(storedResult.getDetailedFindings())
                                 .confidenceScore(storedResult.getConfidenceScore())
+                                .detailedFindings(storedResult.getDetailedFindings())
+                                .recommendation(storedResult.getRecommendation())
                                 .build();
                     }
                     return mapToMammogramResponse(mammogram, aiDiagnosisDto, mammogram.getPatient().getFullName());
@@ -167,9 +161,11 @@ public class MammogramService {
                         AIDiagnosisResult storedResult = mammogram.getAiDiagnosisResult();
                         aiDiagnosisDto = AIDiagnosis.builder()
                                 .prediction(storedResult.getPrediction())
-                                .probabilities(parseProbabilities(storedResult.getProbabilitiesJson()))
+                                .probabilities(storedResult.getProbabilitiesList())
                                 .diagnosisSummary(storedResult.getDetailedFindings())
                                 .confidenceScore(storedResult.getConfidenceScore())
+                                .detailedFindings(storedResult.getDetailedFindings())
+                                .recommendation(storedResult.getRecommendation())
                                 .build();
                     }
                     return mapToMammogramResponse(mammogram, aiDiagnosisDto, patient.getFullName());
@@ -188,15 +184,16 @@ public class MammogramService {
         mammogram = mammogramRepository.save(mammogram);
         log.info("Mammogram ID {} notes updated.", id);
 
-        // Retrieve AI diagnosis result if it exists for the response
         AIDiagnosis aiDiagnosisDto = null;
         if (mammogram.getAiDiagnosisResult() != null) {
             AIDiagnosisResult storedResult = mammogram.getAiDiagnosisResult();
             aiDiagnosisDto = AIDiagnosis.builder()
                     .prediction(storedResult.getPrediction())
-                    .probabilities(parseProbabilities(storedResult.getProbabilitiesJson()))
+                    .probabilities(storedResult.getProbabilitiesList())
                     .diagnosisSummary(storedResult.getDetailedFindings())
                     .confidenceScore(storedResult.getConfidenceScore())
+                    .detailedFindings(storedResult.getDetailedFindings())
+                    .recommendation(storedResult.getRecommendation())
                     .build();
         }
         return mapToMammogramResponse(mammogram, aiDiagnosisDto, mammogram.getPatient().getFullName());
@@ -220,7 +217,6 @@ public class MammogramService {
         }
 
         // 2. Deleting Mammogram will cascade delete AIDiagnosisResult due to CascadeType.ALL
-        //    Ensure your Mammogram entity has cascade = CascadeType.ALL or CascadeType.REMOVE on the aiDiagnosisResult relationship
         mammogramRepository.delete(mammogram);
         log.info("Mammogram ID {} deleted successfully.", id);
     }
@@ -229,7 +225,7 @@ public class MammogramService {
     private MammogramResponse mapToMammogramResponse(Mammogram mammogram, AIDiagnosis aiDiagnosis, String patientName) {
         String imageUrl = imageStorageService.getFileUrl(mammogram.getImagePath());
 
-        // FIX: Convert AIDiagnosis DTO to MammogramResponse.AiDiagnosisResponse nested DTO
+        // Convert AIDiagnosis DTO to MammogramResponse.AiDiagnosisResponse nested DTO
         MammogramResponse.AiDiagnosisResponse aiResponseForMammogramResponse = null;
         if (aiDiagnosis != null) {
             aiResponseForMammogramResponse = MammogramResponse.AiDiagnosisResponse.builder()
@@ -237,6 +233,8 @@ public class MammogramService {
                     .prediction(aiDiagnosis.getPrediction())
                     .confidenceScore(aiDiagnosis.getConfidenceScore())
                     .probabilities(aiDiagnosis.getProbabilities())
+                    .detailedFindings(aiDiagnosis.getDetailedFindings())
+                    .recommendation(aiDiagnosis.getRecommendation())
                     .build();
         }
 
@@ -248,34 +246,10 @@ public class MammogramService {
                 .dateUploaded(mammogram.getDateUploaded())
                 .notes(mammogram.getNotes())
                 .aiDiagnosis(aiResponseForMammogramResponse) // Use the converted nested DTO
+                // Populate reportId. This assumes Mammogram entity has a way to get reportId,
+                // or it's null if no report is linked yet.
+                // If your Mammogram entity has a 'report' relationship, you'd fetch mammogram.getReport().getId()
+                .reportId(null) // Set to null for now, as no direct reportId is available on Mammogram entity
                 .build();
-    }
-
-    // Helper to parse probabilities from JSON string (if stored as JSON string)
-    private List<Double> parseProbabilities(String json) {
-        if (json == null || json.trim().isEmpty()) {
-            return null;
-        }
-        try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            return mapper.readValue(json, mapper.getTypeFactory().constructCollectionType(List.class, Double.class));
-        } catch (IOException e) {
-            log.error("Failed to parse probabilities JSON: {}", json, e);
-            return null;
-        }
-    }
-
-    // Helper to convert probabilities list to JSON string for storage
-    private String convertProbabilitiesToJson(List<Double> probabilities) {
-        if (probabilities == null || probabilities.isEmpty()) {
-            return null;
-        }
-        try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            return mapper.writeValueAsString(probabilities);
-        } catch (IOException e) {
-            log.error("Failed to convert probabilities to JSON: {}", probabilities, e);
-            return null;
-        }
     }
 }

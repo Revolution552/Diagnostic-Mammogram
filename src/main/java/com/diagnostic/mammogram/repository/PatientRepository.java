@@ -25,6 +25,14 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
     Optional<Patient> findByFullNameAndContactInfo(String name, String contactInfo);
 
     /**
+     * NEW: Finds patients whose full name contains the given string, ignoring case.
+     * This is useful for partial name searches.
+     * @param fullName The full name (or part of it) to search for.
+     * @return A list of patients matching the criteria.
+     */
+    List<Patient> findByFullNameContainingIgnoreCase(String fullName);
+
+    /**
      * Finds all patients whose age is greater than or equal to the specified age.
      * @param age The minimum age.
      * @return A list of patients matching the criteria.
@@ -118,7 +126,7 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
      * @return A list of patients matching the specified criteria.
      */
     @Query("SELECT p FROM Patient p WHERE " +
-            "(:fullName IS NULL OR p.fullName LIKE %:fullName%) AND " +
+            "(:fullName IS NULL OR LOWER(p.fullName) LIKE LOWER(concat('%', :fullName, '%'))) AND " + // Added LOWER and concat for robustness
             "(:minAge IS NULL OR p.age >= :minAge) AND " +
             "(:maxAge IS NULL OR p.age <= :maxAge) AND " +
             "(:gender IS NULL OR p.gender = :gender)")
@@ -146,7 +154,7 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
            ORDER BY p.full_name
            """, nativeQuery = true)
     List<Patient> findByMammogramPredictionAndDateRange(
-            @Param("aiPrediction") String aiPrediction, // Renamed parameter to match new logic
+            @Param("aiPrediction") String aiPrediction,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate);
 

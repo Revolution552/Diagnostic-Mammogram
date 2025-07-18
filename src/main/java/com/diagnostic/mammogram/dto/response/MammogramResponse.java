@@ -15,13 +15,16 @@ import java.util.List; // For probabilities
 public class MammogramResponse {
     private Long id;
     private Long patientId;
-    private String patientName; // NEW: Added patientName for frontend display
+    private String patientName;
     private String imagePath; // URL to the stored image
     private String notes;
     private LocalDateTime dateUploaded; // Use LocalDateTime, will be converted to ISO string by Jackson
 
     // Nested DTO for AI Diagnosis results
     private AiDiagnosisResponse aiDiagnosis; // Can be null if no diagnosis yet
+
+    // NEW: Add reportId for frontend display if a report is generated for this mammogram
+    private Long reportId; // Can be null if no report has been generated yet
 
     @Data
     @Builder
@@ -32,5 +35,7 @@ public class MammogramResponse {
         private String prediction;
         private Double confidenceScore;
         private List<Double> probabilities; // Assuming probabilities are doubles
+        private String detailedFindings; // From AIDiagnosis entity
+        private String recommendation;   // From AIDiagnosis entity
     }
 }

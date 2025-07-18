@@ -25,6 +25,10 @@ public class AIDiagnosis {
 
     private Double confidenceScore;
 
+    private String detailedFindings;
+
+    private String recommendation;
+
     private String diagnosisSummary;
 
     // --- Derived/Computed Fields (not directly mapped from Flask JSON) ---
